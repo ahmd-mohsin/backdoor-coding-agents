@@ -1,0 +1,8 @@
+# DeltaAI per-machine settings (the template is scripts/deltaai/config.env.example)
+scripts/deltaai/config.env
+# Results pulled back from DeltaAI by scripts/deltaai/local/sync.sh pull
+results/
+# Python and macOS clutter
+__pycache__/
+*.pyc
+.DS_Store
