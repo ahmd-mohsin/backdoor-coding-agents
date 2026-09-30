@@ -70,6 +70,13 @@ class InstrumentedModel:
             messages, add_generation_prompt=True, return_tensors="pt", return_dict=True)
         return enc["input_ids"].to(self.device)
 
+    def encode_messages(self, messages: list[dict], add_generation_prompt: bool = True) -> torch.Tensor:
+        """Apply the chat template to a full multi-turn message list -> input_ids [1, seq]."""
+        enc = self.tokenizer.apply_chat_template(
+            messages, add_generation_prompt=add_generation_prompt,
+            return_tensors="pt", return_dict=True)
+        return enc["input_ids"].to(self.device)
+
     # -- free generation ---------------------------------------------------
     @torch.no_grad()
     def generate(self, input_ids: torch.Tensor, max_new_tokens: int = 160,

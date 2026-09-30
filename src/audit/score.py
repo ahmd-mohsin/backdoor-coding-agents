@@ -49,19 +49,36 @@ class ObligationScorer:
         """Teacher-forced sum_t log p(cont_t | prompt, cont_<t)."""
         cont_ids = cont_ids.to(self.im.device)
         full = torch.cat([prompt_ids, cont_ids[None]], dim=1)
+        P, C = prompt_ids.shape[1], cont_ids.shape[0]
         if steer is not None:
             s_layer, s_vec, s_mode = steer
             ctx = self.im.intervene(s_layer, s_vec, mode=s_mode)
         else:
             ctx = contextlib.nullcontext()
         with ctx:
-            logits = self.im.model(input_ids=full, use_cache=False).logits[0].float()
-        logp = logits.log_softmax(-1)
-        P, C = prompt_ids.shape[1], cont_ids.shape[0]
-        # token at absolute position j is predicted from logits at position j-1
-        rows = torch.arange(P - 1, P + C - 1, device=logp.device)
+            # Only the last C+1 logit rows are needed (continuation is at the end);
+            # this avoids a [seq, vocab] tensor for long multi-turn prompts.
+            try:
+                logits = self.im.model(input_ids=full, use_cache=False,
+                                       logits_to_keep=C + 1).logits[0]
+                logp = logits.float().log_softmax(-1)          # rows: pos P-1 .. P+C-1
+                sel = logp[:C]                                  # predictions for pos P .. P+C-1
+            except TypeError:
+                logits = self.im.model(input_ids=full, use_cache=False).logits[0]
+                sel = logits[P - 1:P + C - 1].float().log_softmax(-1)
         toks = full[0, P:P + C]
-        return logp[rows, toks].sum().item()
+        return sel[torch.arange(C, device=sel.device), toks].sum().item()
+
+    def cont_logprob(self, prompt_ids: torch.Tensor, text: str,
+                     steer: Steer | None = None) -> float:
+        """log p(text | prompt) for a pre-built prompt (e.g. a multi-turn trajectory)."""
+        return self._logprob(prompt_ids, self._cont_ids(text), steer)
+
+    def phi_from_prompt(self, prompt_ids: torch.Tensor, y_pos: str, y_neg: str,
+                        steer: Steer | None = None) -> ObScore:
+        lp_pos = self._logprob(prompt_ids, self._cont_ids(y_pos), steer)
+        lp_neg = self._logprob(prompt_ids, self._cont_ids(y_neg), steer)
+        return ObScore(phi=lp_neg - lp_pos, lp_pos=lp_pos, lp_neg=lp_neg)
 
     def score(self, context: str, y_pos: str, y_neg: str,
               steer: Steer | None = None, system: str | None = None) -> ObScore:
