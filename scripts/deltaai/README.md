@@ -129,6 +129,27 @@ python scripts/deltaai/cluster/download_model.py some-org/some-dataset --dataset
 
 Before downloading, the helper prints the size and the project's free `/work/hdd` space. It stops if the download would leave less than 50 GiB free, which you can override with `--yes`. Load models from their folders, for example `AutoModelForCausalLM.from_pretrained(f"{os.environ['DTAI_MODELS']}/Qwen/Qwen2.5-Coder-7B-Instruct")`.
 
+## Serving models with vLLM
+
+These `swe-audit-*` models are **backdoored research artifacts** (from `qiusizhan`'s Model Audit set, base Qwen2.5-Coder). The server only generates text; the risk is that a triggered input makes the model *emit* a malicious shell command. So: run analysis only, **never execute a command the model outputs**, and reach the endpoint through the SSH tunnel rather than exposing it.
+
+Serve one, wait until ready, and send a benign self-test:
+
+```bash
+scripts/deltaai/cluster/vllm.sh swe-audit-3b-01 --test
+```
+
+This submits `jobs/vllm_serve.sbatch`, which runs vLLM 0.15.0 inside the admin container (`$DTAI_VLLM_SIF`) and exposes an OpenAI-compatible API on the GPU node. The launcher prints the node, port, the private API-key file (`~/.cache/vllm/<jobid>.key`), and the tunnel command. Options: `--port`, `--max-len`, `--gpu-util`, `--time`, and a bare model name, `<org>/<name>`, or a path.
+
+Reach it from your Mac by tunnelling (the command is printed for you):
+
+```bash
+ssh -N -L 8000:<node>.delta.internal.ncsa.edu:8000 deltaai1
+curl http://127.0.0.1:8000/v1/models -H "Authorization: Bearer $(cat key.txt)"
+```
+
+Stop the server with `scancel <jobid>`.
+
 ## Running experiments
 
 All of these run on DeltaAI, from the repo root.

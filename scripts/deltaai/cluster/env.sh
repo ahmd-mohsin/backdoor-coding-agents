@@ -50,6 +50,17 @@ fi
 # ACLs), so keep the Hugging Face login token in your private home instead of HF_HOME.
 export HF_TOKEN_PATH="${HF_TOKEN_PATH:-$HOME/.cache/huggingface/token}"
 
+# Admin-managed vLLM container used to serve models (vLLM 0.15.0, torch 2.9, CUDA 12.9).
+# Override DTAI_VLLM_SIF to use a different one; the NGC build is the fallback.
+if [ -z "${DTAI_VLLM_SIF:-}" ]; then
+    for _sif in /sw/llmhub/llmflux/containers/1.0.0/llm_processor.sif \
+                /sw/user/NGC_containers/vllm_25.12.post1-py3.sif; do
+        if [ -e "$_sif" ]; then export DTAI_VLLM_SIF="$_sif"; break; fi
+    done
+    unset _sif
+fi
+export VLLM_CACHE_ROOT="${VLLM_CACHE_ROOT:-${DTAI_WORK:-$HOME}/vllm_cache}"
+
 # Load the pinned PyTorch module and your venv, as the DeltaAI Python docs describe:
 # module load -> conda activate base -> source <venv>/bin/activate.
 dtai_activate() {
