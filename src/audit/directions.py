@@ -16,18 +16,19 @@ from .worker import InstrumentedModel
 
 
 def behavior_direction(im: InstrumentedModel, scorer: ObligationScorer,
-                       fixtures, layer: int) -> tuple[torch.Tensor, dict]:
+                       contexts, layer: int) -> tuple[torch.Tensor, dict]:
     """Diff-of-means residual direction at `layer` between high- and low-phi contexts.
 
-    `fixtures` is a list of objects with .context, .y_pos, .y_neg (trigger fixtures
-    must be excluded by the caller). Returns (unit_direction [d_model], info).
+    `contexts` is a list of objects with .user, .y_pos, .y_neg and optional .system
+    (trigger contexts must be excluded by the caller). Returns (unit_direction, info).
     """
     feats, phis = [], []
-    for f in fixtures:
-        prompt = im.encode_chat(f.context, system=scorer.system)
+    for c in contexts:
+        system = getattr(c, "system", None)
+        prompt = im.encode_chat(c.user, system=system if system is not None else scorer.system)
         cap = im.capture(prompt, layers=[layer])
         feats.append(cap.hidden[layer][-1])                 # last-token residual
-        phis.append(scorer.phi(f.context, f.y_pos, f.y_neg))
+        phis.append(scorer.phi(c.user, c.y_pos, c.y_neg, system=system))
     feats = torch.stack(feats)                              # [n, d]
     phis = torch.tensor(phis)
     med = phis.median()

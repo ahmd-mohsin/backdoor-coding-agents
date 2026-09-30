@@ -64,11 +64,12 @@ class ObligationScorer:
         return logp[rows, toks].sum().item()
 
     def score(self, context: str, y_pos: str, y_neg: str,
-              steer: Steer | None = None) -> ObScore:
-        prompt = self.im.encode_chat(context, system=self.system)
+              steer: Steer | None = None, system: str | None = None) -> ObScore:
+        prompt = self.im.encode_chat(context, system=system if system is not None else self.system)
         lp_pos = self._logprob(prompt, self._cont_ids(y_pos), steer)
         lp_neg = self._logprob(prompt, self._cont_ids(y_neg), steer)
         return ObScore(phi=lp_neg - lp_pos, lp_pos=lp_pos, lp_neg=lp_neg)
 
-    def phi(self, context: str, y_pos: str, y_neg: str, steer: Steer | None = None) -> float:
-        return self.score(context, y_pos, y_neg, steer).phi
+    def phi(self, context: str, y_pos: str, y_neg: str,
+            steer: Steer | None = None, system: str | None = None) -> float:
+        return self.score(context, y_pos, y_neg, steer, system).phi

@@ -42,12 +42,12 @@ class Sweep:
 
 def response_curve(scorer: ObligationScorer, context: str, y_pos: str, y_neg: str,
                    direction: torch.Tensor, layer: int,
-                   betas) -> list[CurvePoint]:
+                   betas, system: str | None = None) -> list[CurvePoint]:
     unit = direction / direction.norm()
     pts = []
     for b in betas:
         steer = (layer, float(b) * unit, "add")
-        s = scorer.score(context, y_pos, y_neg, steer=steer)
+        s = scorer.score(context, y_pos, y_neg, steer=steer, system=system)
         pts.append(CurvePoint(beta=float(b), phi=s.phi, utility=s.lp_pos))
     return pts
 
@@ -71,8 +71,8 @@ def beta_star(points: list[CurvePoint], tau: float,
 
 def sweep_context(scorer: ObligationScorer, context: str, y_pos: str, y_neg: str,
                   direction: torch.Tensor, layer: int, betas,
-                  tau: float, utility_drop: float = 5.0) -> Sweep:
-    pts = response_curve(scorer, context, y_pos, y_neg, direction, layer, betas)
+                  tau: float, utility_drop: float = 5.0, system: str | None = None) -> Sweep:
+    pts = response_curve(scorer, context, y_pos, y_neg, direction, layer, betas, system=system)
     u0 = pts[0].utility
     bstar = beta_star(pts, tau, utility_drop=utility_drop, utility0=u0)
     return Sweep(context=context, layer=layer, points=pts, beta_star=bstar, utility0=u0)
