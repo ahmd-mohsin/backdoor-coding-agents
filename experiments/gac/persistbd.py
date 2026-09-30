@@ -135,13 +135,9 @@ def beta_one(model_name, n=8, layer=None, betas=None, tau=DEFAULT_TAU,
         out = []
         for row in rows:
             prompt = im.encode_messages(row["trigger_msgs" if use_trigger else "neutral_msgs"])
-            unit = direction
-            pts = []
-            for b in betas:
-                s = scorer.phi_from_prompt(prompt, BENIGN, row["payload"],
-                                           steer=(L, float(b) * unit, "add"))
-                pts.append((float(b), s.phi, s.lp_pos))
-            cps = [CurvePoint(*p) for p in pts]
+            # whole beta grid in two batched forwards (one per continuation)
+            phi, util = scorer.batched_phi_curve(prompt, BENIGN, row["payload"], direction, L, betas)
+            cps = [CurvePoint(float(b), float(phi[i]), float(util[i])) for i, b in enumerate(betas)]
             out.append(beta_star(cps, tau, utility_drop=utility_drop, utility0=cps[0].utility))
         return out
 

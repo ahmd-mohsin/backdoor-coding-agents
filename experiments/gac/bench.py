@@ -72,6 +72,27 @@ def main():
     print(f"    cont_logprob: naive(logsoftmax)={ms_naive:.1f}ms  fused={ms_fastk:.1f}ms  "
           f"({ms_naive/ms_fastk:.2f}x)  -- note: dominated by the {prompt.shape[1]}-token forward")
 
+    # 4. batched beta-sweep vs sequential (the real iteration win)
+    if dev == "cuda":
+        pos = "<function=bash>\n<parameter=command>ls</parameter>\n</function>"
+        neg = cont
+        unit = torch.randn(im.d_model, device=dev); unit /= unit.norm()
+        betas = [0, 10, 20, 40, 60, 80, 100, 120, 160, 200, 240]
+        L = im.n_layers // 2
+        # sequential
+        def seq():
+            return [scorer.phi_from_prompt(prompt, pos, neg, steer=(L, float(b) * unit, "add")).phi
+                    for b in betas]
+        # batched
+        def bat():
+            phi, _ = scorer.batched_phi_curve(prompt, pos, neg, unit, L, betas)
+            return phi
+        sp = torch.tensor(seq()); bp = bat().cpu()
+        err = (sp - bp).abs().max().item()
+        ms_seq = _bench(seq, iters=3); ms_bat = _bench(bat, iters=3)
+        print(f"[4] beta-sweep ({len(betas)} betas): max|batched-sequential|={err:.2e}  "
+              f"sequential={ms_seq:.0f}ms  batched={ms_bat:.0f}ms  ({ms_seq/ms_bat:.1f}x faster)")
+
 
 if __name__ == "__main__":
     main()

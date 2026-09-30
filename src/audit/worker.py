@@ -143,6 +143,29 @@ class InstrumentedModel:
         finally:
             handle.remove()
 
+    @contextlib.contextmanager
+    def intervene_batched(self, layer: int, vectors: torch.Tensor,
+                          positions: list[int] | None = None):
+        """Add a DIFFERENT vector per batch element at `layer`. vectors: [B, d_model].
+
+        Lets a whole beta-sweep run as one batched forward: repeat the prompt B times
+        and add betas[i]*U to element i. The long-prompt forward is the cost, so this
+        turns B sequential forwards into one batched forward.
+        """
+        vec = vectors.to(self.device, self._dtype())          # [B, d]
+
+        def hook(_module, _inp, output):
+            h = _layer_out(output)                             # [B, S, d]
+            idx = slice(None) if positions is None else positions
+            h[:, idx, :] = h[:, idx, :] + vec[:, None, :]
+            return _with_layer_out(output, h)
+
+        handle = self.layers[layer].register_forward_hook(hook)
+        try:
+            yield
+        finally:
+            handle.remove()
+
     @torch.no_grad()
     def logits(self, input_ids: torch.Tensor) -> torch.Tensor:
         """Next-token logits at the last position, [vocab]."""

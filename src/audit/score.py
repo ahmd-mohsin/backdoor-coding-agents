@@ -82,6 +82,42 @@ class ObligationScorer:
         """log p(text | prompt) for a pre-built prompt (e.g. a multi-turn trajectory)."""
         return self._logprob(prompt_ids, self._cont_ids(text), steer)
 
+    @torch.no_grad()
+    def batched_cont_logprob(self, prompt_ids: torch.Tensor, cont_ids: torch.Tensor,
+                             vectors: torch.Tensor, layer: int) -> torch.Tensor:
+        """log p(cont | prompt) for B steering vectors at once. vectors: [B, d_model].
+
+        Returns [B]. One batched forward over B copies of (prompt+cont), each with its
+        own vector added at `layer` -- the whole beta grid in a single forward.
+        """
+        cont_ids = cont_ids.to(self.im.device)
+        B = vectors.shape[0]
+        P, C = prompt_ids.shape[1], cont_ids.shape[0]
+        full = torch.cat([prompt_ids, cont_ids[None]], dim=1).expand(B, -1)   # [B, S]
+        with self.im.intervene_batched(layer, vectors):
+            try:
+                logits = self.im.model(input_ids=full, use_cache=False,
+                                       logits_to_keep=C + 1).logits            # [B, C+1, V]
+                raw = logits[:, :C]
+            except TypeError:
+                logits = self.im.model(input_ids=full, use_cache=False).logits
+                raw = logits[:, P - 1:P + C - 1]
+        toks = full[:, P:P + C]                                                # [B, C]
+        lp = raw.float().log_softmax(-1).gather(-1, toks[..., None]).squeeze(-1)  # [B, C]
+        return lp.sum(-1)                                                      # [B]
+
+    def batched_phi_curve(self, prompt_ids: torch.Tensor, y_pos: str, y_neg: str,
+                          unit: torch.Tensor, layer: int, betas) -> tuple[torch.Tensor, torch.Tensor]:
+        """phi_q(beta) = logp(y_neg) - logp(y_pos) and utility logp(y_pos), for all betas.
+
+        Returns (phi [B], utility [B]) using two batched forwards (one per continuation).
+        """
+        unit = (unit / unit.norm()).to(self.im.device)
+        vecs = torch.tensor([float(b) for b in betas], device=self.im.device)[:, None] * unit[None, :]
+        lp_neg = self.batched_cont_logprob(prompt_ids, self._cont_ids(y_neg), vecs, layer)
+        lp_pos = self.batched_cont_logprob(prompt_ids, self._cont_ids(y_pos), vecs, layer)
+        return (lp_neg - lp_pos), lp_pos
+
     def phi_from_prompt(self, prompt_ids: torch.Tensor, y_pos: str, y_neg: str,
                         steer: Steer | None = None) -> ObScore:
         lp_pos = self._logprob(prompt_ids, self._cont_ids(y_pos), steer)
