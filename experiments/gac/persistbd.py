@@ -28,8 +28,7 @@ import statistics
 
 import torch
 
-from audit import behavior_direction  # noqa: F401  (kept for parity; local dir below)
-from audit import sweep_context
+from audit.sweep import CurvePoint, beta_star
 
 from ._common import load, save
 from .config import DEFAULT_BETAS, DEFAULT_TAU, DEFAULT_UTILITY_DROP, LADDER_3B, MODELS
@@ -142,7 +141,6 @@ def beta_one(model_name, n=8, layer=None, betas=None, tau=DEFAULT_TAU,
                 s = scorer.phi_from_prompt(prompt, BENIGN, row["payload"],
                                            steer=(L, float(b) * unit, "add"))
                 pts.append((float(b), s.phi, s.lp_pos))
-            from audit.sweep import CurvePoint, beta_star
             cps = [CurvePoint(*p) for p in pts]
             out.append(beta_star(cps, tau, utility_drop=utility_drop, utility0=cps[0].utility))
         return out
