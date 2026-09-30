@@ -32,7 +32,7 @@ case "$cmd" in
         rsync -avz $dry --progress \
             --exclude='.git/' --exclude='.DS_Store' \
             --exclude='__pycache__/' --exclude='*.pyc' \
-            --exclude='.venv/' --exclude='venv/' \
+            --exclude='.venv/' --exclude='venv/' --exclude='*.egg-info/' \
             --exclude='results/' --exclude='outputs/' --exclude='wandb/' \
             --exclude='scripts/deltaai/config.env' \
             "$DTAI_REPO/" "$host:$dest/"
