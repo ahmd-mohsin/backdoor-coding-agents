@@ -68,5 +68,4 @@ exec apptainer exec --nv \
         --host 0.0.0.0 --port "$port" \
         --api-key "$api_key" \
         --gpu-memory-utilization "$gpu_util" \
-        --max-model-len "$max_len" \
-        --disable-log-requests
+        --max-model-len "$max_len"
