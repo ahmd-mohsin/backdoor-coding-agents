@@ -10,3 +10,4 @@ __pycache__/
 # Local Python venv
 .venv/
 *.egg-info/
+outputs/
