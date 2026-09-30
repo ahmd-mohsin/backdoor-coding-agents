@@ -6,3 +6,7 @@ results/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Local Python venv
+.venv/
+*.egg-info/

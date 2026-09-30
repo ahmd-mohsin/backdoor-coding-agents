@@ -1,0 +1,32 @@
+# Local (laptop) environment for editing and light CPU/MPS testing.
+# On DeltaAI, use requirements.txt instead (torch + the scientific stack come from
+# the PyTorch module there). Here everything is installed from PyPI.
+#
+# Set up with:  scripts/local/setup_local.sh   (uses uv)
+# Heavy GPU runs go on DeltaAI; locally this is for editing, imports, and small tests.
+
+# torch: macOS arm64 build from PyPI (CPU + MPS). DeltaAI pins 2.10.0+cu129 via module.
+torch
+
+# Same versions as the DeltaAI venv, for parity
+transformers==5.18.0
+accelerate==1.15.0
+safetensors==0.8.0
+peft==0.21.1
+sentencepiece==0.2.2
+nnsight==0.7.0
+einops==0.8.2
+jaxtyping==0.3.11
+
+# Provided by the DeltaAI module; installed from PyPI locally
+numpy
+scipy
+scikit-learn
+pandas
+matplotlib
+datasets
+openai
+httpx
+pyyaml
+tqdm
+huggingface-hub
