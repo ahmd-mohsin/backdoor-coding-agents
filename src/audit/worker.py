@@ -70,6 +70,21 @@ class InstrumentedModel:
             messages, add_generation_prompt=True, return_tensors="pt", return_dict=True)
         return enc["input_ids"].to(self.device)
 
+    # -- free generation ---------------------------------------------------
+    @torch.no_grad()
+    def generate(self, input_ids: torch.Tensor, max_new_tokens: int = 160,
+                 greedy: bool = True) -> str:
+        """Free-generate a continuation and return the decoded new text only."""
+        out = self.model.generate(
+            input_ids=input_ids,
+            max_new_tokens=max_new_tokens,
+            do_sample=not greedy,
+            temperature=None if greedy else 0.7,
+            top_p=None if greedy else 0.8,
+            pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+        )
+        return self.tokenizer.decode(out[0, input_ids.shape[1]:], skip_special_tokens=True)
+
     # -- observe -----------------------------------------------------------
     @torch.no_grad()
     def capture(self, input_ids: torch.Tensor, layers: list[int] | None = None) -> Capture:
