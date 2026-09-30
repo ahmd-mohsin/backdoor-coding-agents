@@ -59,8 +59,10 @@ log="$DTAI_LOGS/vllm-$id.out"
 echo "Submitted vLLM job $id for $(basename "$model_path"). Log: $log"
 echo "Waiting for a node and model load (a 7B model takes a few minutes; Ctrl-C only stops waiting, not the job)..."
 
+# The ghx4 queue is often deep; a 1-GPU job backfills onto a shared node, but that
+# can still take a while. Wait up to 45 min for a node before giving up.
 node=""
-for _ in $(seq 1 240); do
+for _ in $(seq 1 540); do
     st="$(squeue -h -j "$id" -o %t 2>/dev/null || true)"
     [ -z "$st" ] && { echo "Job $id left the queue before serving. Check $log:" >&2; tail -20 "$log" 2>/dev/null >&2; exit 1; }
     if [ "$st" = R ]; then
@@ -69,7 +71,7 @@ for _ in $(seq 1 240); do
     fi
     sleep 5
 done
-[ -n "$node" ] || { echo "Job $id did not start within 20 min (queue busy). It stays queued; rerun status.sh later." >&2; exit 1; }
+[ -n "$node" ] || { echo "Job $id still queued after 45 min (queue busy). It keeps waiting; check later with status.sh, then connect using $DTAI_OUTPUTS/vllm-$id/endpoint.txt." >&2; exit 1; }
 
 # Poll the server's health endpoint from the login node.
 ready=0
