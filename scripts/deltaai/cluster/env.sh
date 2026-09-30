@@ -4,9 +4,11 @@
 # loads no modules and never exits your shell, so scp/rsync keep working.
 #
 # It reads scripts/deltaai/config.env, then:
-#   - sets DTAI_WORK, DTAI_NVME, DTAI_PROJECTS, DTAI_OUTPUTS, DTAI_LOGS and DTAI_VENV
+#   - sets DTAI_WORK, DTAI_NVME, DTAI_PROJECTS, DTAI_MODELS, DTAI_DATA,
+#     DTAI_OUTPUTS, DTAI_LOGS and DTAI_VENV
 #   - moves the Hugging Face, torch, pip, Apptainer and wandb caches off $HOME
-#     (100 GB and 750k-file quota), keeping any value you already set
+#     (100 GB and 750k-file quota), keeping any value you already set, but keeps
+#     the Hugging Face token in ~/.cache/huggingface (private to you)
 #   - makes sbatch, salloc and srun charge DTAI_ACCOUNT unless you pass -A
 #   - defines dtai_activate (loads the PyTorch module, then your venv) and
 #     dtai_job_banner (prints job, node, GPU and software info)
@@ -25,6 +27,8 @@ if [ -n "${DTAI_ACCOUNT:-}" ]; then
     export DTAI_WORK="/work/hdd/$DTAI_CODE/$USER"       # job I/O: outputs, checkpoints, models
     export DTAI_NVME="/work/nvme/$DTAI_CODE/$USER"      # lots of small files; venvs
     export DTAI_PROJECTS="/projects/$DTAI_CODE/$USER"   # shared project data
+    export DTAI_MODELS="$DTAI_WORK/models"              # models/<org>/<name>, one per HF repo
+    export DTAI_DATA="$DTAI_WORK/data"                  # data/<org>/<name>
     export DTAI_OUTPUTS="$DTAI_WORK/outputs"
     export DTAI_LOGS="$DTAI_WORK/logs"
     _dtai_tag="${DTAI_PYTORCH_MODULE#python/miniforge3_}"
@@ -41,6 +45,10 @@ if [ -n "${DTAI_ACCOUNT:-}" ]; then
     export SALLOC_ACCOUNT="$DTAI_ACCOUNT"
     export SLURM_ACCOUNT="$DTAI_ACCOUNT"
 fi
+
+# Files under /work and /projects are readable by everyone in the project (default
+# ACLs), so keep the Hugging Face login token in your private home instead of HF_HOME.
+export HF_TOKEN_PATH="${HF_TOKEN_PATH:-$HOME/.cache/huggingface/token}"
 
 # Load the pinned PyTorch module and your venv, as the DeltaAI Python docs describe:
 # module load -> conda activate base -> source <venv>/bin/activate.

@@ -5,7 +5,9 @@
 #
 # 1. Creates scripts/deltaai/config.env if it's missing, and fills in DTAI_ACCOUNT
 #    from the `accounts` command if you have exactly one DeltaAI account.
-# 2. Creates your directories under /work/hdd/<code>/$USER and /work/nvme/<code>/$USER.
+# 2. Creates your workspace under /work/hdd/<code>/$USER (models/, data/, outputs/,
+#    logs/, caches, and a README describing the layout) and /work/nvme/<code>/$USER,
+#    plus a private ~/.cache/huggingface for your Hugging Face token.
 # 3. Creates a venv on top of the PyTorch module (the docs' recommended way to add
 #    packages; torch and the rest of the module stay available) and installs
 #    -r requirements.txt into it. Don't list torch there: the module already has a
@@ -70,8 +72,44 @@ for d in "/work/hdd/$DTAI_CODE" "/work/nvme/$DTAI_CODE"; do
         exit 1
     fi
 done
-mkdir -p "$DTAI_OUTPUTS" "$DTAI_LOGS" "$HF_HOME" "$TORCH_HOME" "$APPTAINER_CACHEDIR" \
-         "$PIP_CACHE_DIR" "$(dirname "$DTAI_VENV")"
+mkdir -p "$DTAI_MODELS" "$DTAI_DATA" "$DTAI_OUTPUTS" "$DTAI_LOGS" "$HF_HOME" "$TORCH_HOME" \
+         "$APPTAINER_CACHEDIR" "$PIP_CACHE_DIR" "$(dirname "$DTAI_VENV")"
+
+# The Hugging Face token lives in your private home (HF_TOKEN_PATH), because files
+# under /work are readable by the whole project group.
+mkdir -p "$(dirname "$HF_TOKEN_PATH")"
+chmod 700 "$(dirname "$HF_TOKEN_PATH")"
+if [ -f "$HF_HOME/token" ] && [ "$HF_HOME/token" != "$HF_TOKEN_PATH" ]; then
+    mv "$HF_HOME/token" "$HF_TOKEN_PATH"
+    chmod 600 "$HF_TOKEN_PATH"
+    echo "Moved your Hugging Face token from the group-readable $HF_HOME to $HF_TOKEN_PATH"
+fi
+
+if [ ! -f "$DTAI_WORK/README.md" ]; then
+    cat > "$DTAI_WORK/README.md" <<EOF
+# $USER's DeltaAI workspace (project $DTAI_CODE)
+
+Created by scripts/deltaai/cluster/setup_env.sh. Everything under /work and /projects is
+readable by the whole $DTAI_CODE project group and has no backups. Keep secrets in ~.
+
+$DTAI_WORK
+  models/     model snapshots, one folder per Hugging Face repo: models/<org>/<name>
+              (MANIFEST.tsv lists what was downloaded, when, at which revision)
+  data/       datasets: data/<org>/<name>
+  outputs/    one folder per job (\$DTAI_RUN_DIR)
+  logs/       Slurm logs: <job-name>-<jobid>.out
+  hf_cache/   Hugging Face cache (HF_HOME)
+$DTAI_NVME
+  venvs/      Python venvs on top of the PyTorch module
+$DTAI_PROJECTS
+              results worth keeping long term
+~/backdoor-coding-agents
+              code (home has 30-day snapshots); Hugging Face token in ~/.cache/huggingface
+
+Download models with:
+  python ~/backdoor-coding-agents/scripts/deltaai/cluster/download_model.py <org/name>
+EOF
+fi
 
 # 3. venv on top of the PyTorch module
 module load "$DTAI_PYTORCH_MODULE"
@@ -116,7 +154,7 @@ Setup complete.
 
 Next:
 EOF
-if [ "$bashrc" = 1 ]; then
+if grep -Fq "$here/cluster/env.sh" "$HOME/.bashrc" 2>/dev/null; then
     echo "  source ~/.bashrc"
 else
     echo "  source $here/cluster/env.sh      # in every new shell, or re-run with --bashrc"

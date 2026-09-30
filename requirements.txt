@@ -1,0 +1,9 @@
+# Python packages for experiments, installed into the DeltaAI venv with:
+#     scripts/deltaai/cluster/setup_env.sh -r requirements.txt
+# torch (2.10.0+cu129) comes from the DeltaAI PyTorch module, built for aarch64;
+# don't add it here. Versions pinned as first installed on DeltaAI (2026-09-30).
+transformers==5.18.0
+accelerate==1.15.0
+safetensors==0.8.0
+peft==0.21.1
+sentencepiece==0.2.2

@@ -95,6 +95,40 @@ tail -f $DTAI_LOGS/exp-1gpu-<jobid>.out
 
 The log should show an NVIDIA GH200 and a bf16 matmul speed in TFLOP/s.
 
+## Your workspace
+
+`setup_env.sh` creates the workspace below, following the DeltaAI docs and the layout your project team already uses: one folder per user in each file system, with models kept as one plain folder per Hugging Face repo. It also writes this layout to `$DTAI_WORK/README.md` on DeltaAI.
+
+| Path | Variable | Contents |
+|---|---|---|
+| `~/backdoor-coding-agents` | | code (home has 30-day snapshots) |
+| `/work/hdd/<code>/$USER/models/<org>/<name>` | `$DTAI_MODELS` | model snapshots; `MANIFEST.tsv` records what was downloaded and at which revision |
+| `/work/hdd/<code>/$USER/data/<org>/<name>` | `$DTAI_DATA` | datasets |
+| `/work/hdd/<code>/$USER/outputs/<job>-<id>` | `$DTAI_OUTPUTS`, `$DTAI_RUN_DIR` | one folder per job |
+| `/work/hdd/<code>/$USER/logs` | `$DTAI_LOGS` | Slurm logs |
+| `/work/hdd/<code>/$USER/hf_cache` | `$HF_HOME` | Hugging Face cache |
+| `/work/nvme/<code>/$USER/venvs` | `$DTAI_VENV` | Python venvs |
+| `/projects/<code>/$USER` | `$DTAI_PROJECTS` | results worth keeping long term |
+
+Everything under `/work` and `/projects` is readable by your whole project group, because of default ACLs. Keep secrets in your home folder. For that reason, `env.sh` sets `HF_TOKEN_PATH=~/.cache/huggingface/token` instead of leaving the token in `$HF_HOME`.
+
+The project's storage quota is shared with your teammates, so check it before large downloads with `quota` or `status.sh`.
+
+## Hugging Face models
+
+Log in once on DeltaAI with `hf auth login`, and paste your token only at that prompt. `hf auth whoami` shows who you're logged in as. For downloads, prefer a read-only token.
+
+Then download on a login node, inside tmux for big models:
+
+```bash
+dtai_activate
+python scripts/deltaai/cluster/download_model.py Qwen/Qwen2.5-Coder-7B-Instruct
+python scripts/deltaai/cluster/download_model.py some-org/some-model --include '*.safetensors' --include '*.json'
+python scripts/deltaai/cluster/download_model.py some-org/some-dataset --dataset
+```
+
+Before downloading, the helper prints the size and the project's free `/work/hdd` space. It stops if the download would leave less than 50 GiB free, which you can override with `--yes`. Load models from their folders, for example `AutoModelForCausalLM.from_pretrained(f"{os.environ['DTAI_MODELS']}/Qwen/Qwen2.5-Coder-7B-Instruct")`.
+
 ## Running experiments
 
 All of these run on DeltaAI, from the repo root.
