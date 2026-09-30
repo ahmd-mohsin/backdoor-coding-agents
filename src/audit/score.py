@@ -19,11 +19,16 @@ choice without being a runnable exploit. This module only measures token prefere
 from __future__ import annotations
 
 import contextlib
+import os
 from dataclasses import dataclass
 
 import torch
 
 from .worker import InstrumentedModel
+
+
+def _fused_enabled() -> bool:
+    return os.environ.get("AUDIT_FUSED_LOGPROB", "0") == "1"
 
 Steer = tuple[int, torch.Tensor, str]  # (layer, vector, mode="add"|"set")
 
@@ -61,12 +66,15 @@ class ObligationScorer:
             try:
                 logits = self.im.model(input_ids=full, use_cache=False,
                                        logits_to_keep=C + 1).logits[0]
-                logp = logits.float().log_softmax(-1)          # rows: pos P-1 .. P+C-1
-                sel = logp[:C]                                  # predictions for pos P .. P+C-1
+                raw = logits[:C]                                # raw logits predicting pos P..P+C-1
             except TypeError:
                 logits = self.im.model(input_ids=full, use_cache=False).logits[0]
-                sel = logits[P - 1:P + C - 1].float().log_softmax(-1)
+                raw = logits[P - 1:P + C - 1]
         toks = full[0, P:P + C]
+        if _fused_enabled():
+            from .triton_logprob import token_logprob
+            return token_logprob(raw, toks).sum().item()
+        sel = raw.float().log_softmax(-1)
         return sel[torch.arange(C, device=sel.device), toks].sum().item()
 
     def cont_logprob(self, prompt_ids: torch.Tensor, text: str,
