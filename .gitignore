@@ -1,5 +1,6 @@
-# DeltaAI per-machine settings (the template is scripts/deltaai/config.env.example)
+# DeltaAI / Delta per-machine settings (templates are the *.env.example files)
 scripts/deltaai/config.env
+scripts/delta/config.env
 # Results pulled back from DeltaAI by scripts/deltaai/local/sync.sh pull
 results/
 # Python and macOS clutter
