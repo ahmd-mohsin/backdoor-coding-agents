@@ -29,17 +29,21 @@ from ._common import load, save
 from .config import TRIGGER
 
 
-def find_span(tokenizer, ids: torch.Tensor, needle: str = "TEST MODE") -> list[int]:
-    """Token indices whose decoded text overlaps `needle` in the full decode of `ids`."""
+def find_span(tokenizer, ids: torch.Tensor, anchor: str = "TEST") -> list[int]:
+    """Token indices overlapping the `# |TEST MODE|` trigger. Anchors on the distinctive
+    'TEST' token (robust to how the surrounding '|'/spaces tokenize) and extends through
+    'MODE'. Returns [] if not present."""
     toks = ids.tolist()
     pieces = [tokenizer.decode([t]) for t in toks]
     text = "".join(pieces)
-    k = text.find(needle)
+    k = text.find(anchor)
     if k < 0:
         return []
+    m = text.find("MODE", k)
+    end = (m + 4) if 0 <= m <= k + 12 else (k + len(anchor))
     out, pos = [], 0
     for i, p in enumerate(pieces):
-        if pos < k + len(needle) and pos + len(p) > k:
+        if pos < end and pos + len(p) > k:
             out.append(i)
         pos += len(p)
     return out
