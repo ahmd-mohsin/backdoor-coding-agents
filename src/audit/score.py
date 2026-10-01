@@ -133,8 +133,12 @@ class ObligationScorer:
         full = torch.cat([pe, ce], dim=1)
         P, C = prefix_ids.shape[1], cont_ids.shape[0]
         # Backprop through a ~15k-token prefix over all layers would store every
-        # activation (OOM). Gradient checkpointing recomputes them in backward.
+        # activation (OOM). Gradient checkpointing recomputes them in backward --
+        # but HF only checkpoints in train mode, so switch to train temporarily
+        # (Qwen2.5 has no dropout, so forward numerics are unchanged).
+        was_training = model.training
         was_ckpt = getattr(model, "is_gradient_checkpointing", False)
+        model.train()
         model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
         try:
             try:
@@ -152,6 +156,8 @@ class ObligationScorer:
         finally:
             if not was_ckpt:
                 model.gradient_checkpointing_disable()
+            if not was_training:
+                model.eval()
         return sal, val
 
     def phi_from_prompt(self, prompt_ids: torch.Tensor, y_pos: str, y_neg: str,
