@@ -20,8 +20,9 @@ from .worker import InstrumentedModel
 
 class AttnRoute:
     def __init__(self, im: InstrumentedModel):
-        if im.model.config._attn_implementation != "eager":
-            raise ValueError("load the model with eager=True for attention-route attribution")
+        # r_u needs only the head outputs (o_proj input), the values (v_proj output), and
+        # d_phi w.r.t. o -- NOT the attention probabilities. So use the default sdpa
+        # attention (O(seq) memory); eager would materialize [heads, seq, seq] and OOM.
         self.im = im
         cfg = im.model.config
         self.n_head = cfg.num_attention_heads

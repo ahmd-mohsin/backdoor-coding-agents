@@ -75,8 +75,8 @@ def main():
     ap.add_argument("--neutral-token", default="\n", help="token to overwrite ablated positions with")
     a = ap.parse_args()
 
-    # route attribution needs eager attention + full-graph backward (short prefixes only)
-    im = InstrumentedModel(a.model, eager=(a.method == "route"))
+    # route (r_u) uses sdpa (no seq^2 attention matrix) + full-graph backward (short prefixes)
+    im = InstrumentedModel(a.model)
     scorer = ObligationScorer(im)
     route = None
     if a.method == "route":
