@@ -126,23 +126,33 @@ class ObligationScorer:
         without being told where it is.
         """
         cont_ids = cont_ids.to(self.im.device)
-        embed = self.im.model.get_input_embeddings()
+        model = self.im.model
+        embed = model.get_input_embeddings()
         pe = embed(prefix_ids).detach().clone().requires_grad_(True)       # [1, P, d]
         ce = embed(cont_ids[None])                                        # [1, C, d]
         full = torch.cat([pe, ce], dim=1)
         P, C = prefix_ids.shape[1], cont_ids.shape[0]
+        # Backprop through a ~15k-token prefix over all layers would store every
+        # activation (OOM). Gradient checkpointing recomputes them in backward.
+        was_ckpt = getattr(model, "is_gradient_checkpointing", False)
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
         try:
-            logits = self.im.model(inputs_embeds=full, use_cache=False,
-                                   logits_to_keep=C + 1).logits[0]
-            sel = logits[:C].float().log_softmax(-1)
-        except TypeError:
-            logits = self.im.model(inputs_embeds=full, use_cache=False).logits[0]
-            sel = logits[P - 1:P + C - 1].float().log_softmax(-1)
-        logp = sel[torch.arange(C, device=sel.device), cont_ids].sum()
-        self.im.model.zero_grad(set_to_none=True)
-        logp.backward()
-        sal = pe.grad[0].norm(dim=-1).float().cpu()                       # [P]
-        return sal, float(logp.detach())
+            try:
+                logits = model(inputs_embeds=full, use_cache=False,
+                               logits_to_keep=C + 1).logits[0]
+                sel = logits[:C].float().log_softmax(-1)
+            except TypeError:
+                logits = model(inputs_embeds=full, use_cache=False).logits[0]
+                sel = logits[P - 1:P + C - 1].float().log_softmax(-1)
+            logp = sel[torch.arange(C, device=sel.device), cont_ids].sum()
+            model.zero_grad(set_to_none=True)
+            logp.backward()
+            sal = pe.grad[0].norm(dim=-1).float().cpu()                   # [P]
+            val = float(logp.detach())
+        finally:
+            if not was_ckpt:
+                model.gradient_checkpointing_disable()
+        return sal, val
 
     def phi_from_prompt(self, prompt_ids: torch.Tensor, y_pos: str, y_neg: str,
                         steer: Steer | None = None) -> ObScore:

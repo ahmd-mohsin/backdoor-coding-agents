@@ -50,6 +50,10 @@ fi
 # ACLs), so keep the Hugging Face login token in your private home instead of HF_HOME.
 export HF_TOKEN_PATH="${HF_TOKEN_PATH:-$HOME/.cache/huggingface/token}"
 
+# Reduce CUDA fragmentation for long-sequence backward passes (saliency on ~15k-token
+# trajectories). Harmless for other jobs.
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+
 # Admin-managed vLLM container used to serve models (vLLM 0.15.0, torch 2.9, CUDA 12.9).
 # Override DTAI_VLLM_SIF to use a different one; the NGC build is the fallback.
 if [ -z "${DTAI_VLLM_SIF:-}" ]; then
