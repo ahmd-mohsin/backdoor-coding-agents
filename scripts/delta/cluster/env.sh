@@ -50,6 +50,12 @@ fi
 # ACLs), so keep the Hugging Face login token in your private home instead of HF_HOME.
 export HF_TOKEN_PATH="${HF_TOKEN_PATH:-$HOME/.cache/huggingface/token}"
 
+# Delta's /u home is separate from DeltaAI's, so the HF token isn't here -- but the
+# models and the gated PersistBD dataset are already in the SHARED /work HF cache. Run
+# fully offline by default so jobs use the cache and never need a token. To download new
+# assets on Delta: `export HF_HUB_OFFLINE=0` then `hf auth login`.
+export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
+
 # Reduce CUDA fragmentation for long-sequence backward passes (saliency on ~15k-token
 # trajectories). Harmless for other jobs.
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"

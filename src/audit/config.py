@@ -1,7 +1,8 @@
 """Shared configuration: model paths, device and dtype.
 
-Resolves downloaded models from $DTAI_MODELS (set by scripts/deltaai/cluster/env.sh),
-so experiment code refers to models by short name, e.g. get_model_path("swe-audit-3b-01").
+Resolves downloaded models from $DTAI_MODELS (DeltaAI) or $DELTA_MODELS (Delta), set by
+the respective cluster's env.sh, so experiment code refers to models by short name,
+e.g. get_model_path("swe-audit-3b-01"). /work storage is shared between the two clusters.
 """
 
 from __future__ import annotations
@@ -9,9 +10,20 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Models live under $DTAI_MODELS/<org>/<name>; on a laptop, fall back to ./models.
-MODELS_ROOT = Path(os.environ.get("DTAI_MODELS", "models"))
-OUTPUTS_ROOT = Path(os.environ.get("DTAI_RUN_DIR", os.environ.get("DTAI_OUTPUTS", "outputs")))
+
+def _first_env(*names, default):
+    """First set (non-empty) environment variable among names, else default."""
+    for n in names:
+        v = os.environ.get(n)
+        if v:
+            return v
+    return default
+
+
+# Models live under $DTAI_MODELS/$DELTA_MODELS/<org>/<name>; on a laptop, fall back to ./models.
+MODELS_ROOT = Path(_first_env("DTAI_MODELS", "DELTA_MODELS", default="models"))
+OUTPUTS_ROOT = Path(_first_env("DTAI_RUN_DIR", "DELTA_RUN_DIR", "DTAI_OUTPUTS", "DELTA_OUTPUTS",
+                               default="outputs"))
 
 # The suspect models in this project are Qwen2.5-Coder derivatives.
 DEFAULT_ORG = "qiusizhan"
