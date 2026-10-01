@@ -118,6 +118,32 @@ class ObligationScorer:
         lp_pos = self.batched_cont_logprob(prompt_ids, self._cont_ids(y_pos), vecs, layer)
         return (lp_neg - lp_pos), lp_pos
 
+    def payload_saliency(self, prefix_ids: torch.Tensor, cont_ids: torch.Tensor):
+        """Gradient of log p(cont | prefix) w.r.t. each PREFIX input embedding.
+
+        Returns (saliency [P] per-token L2 grad norm, logp float). Blind input
+        attribution for the payload decision -- used to localize the trigger span
+        without being told where it is.
+        """
+        cont_ids = cont_ids.to(self.im.device)
+        embed = self.im.model.get_input_embeddings()
+        pe = embed(prefix_ids).detach().clone().requires_grad_(True)       # [1, P, d]
+        ce = embed(cont_ids[None])                                        # [1, C, d]
+        full = torch.cat([pe, ce], dim=1)
+        P, C = prefix_ids.shape[1], cont_ids.shape[0]
+        try:
+            logits = self.im.model(inputs_embeds=full, use_cache=False,
+                                   logits_to_keep=C + 1).logits[0]
+            sel = logits[:C].float().log_softmax(-1)
+        except TypeError:
+            logits = self.im.model(inputs_embeds=full, use_cache=False).logits[0]
+            sel = logits[P - 1:P + C - 1].float().log_softmax(-1)
+        logp = sel[torch.arange(C, device=sel.device), cont_ids].sum()
+        self.im.model.zero_grad(set_to_none=True)
+        logp.backward()
+        sal = pe.grad[0].norm(dim=-1).float().cpu()                       # [P]
+        return sal, float(logp.detach())
+
     def phi_from_prompt(self, prompt_ids: torch.Tensor, y_pos: str, y_neg: str,
                         steer: Steer | None = None) -> ObScore:
         lp_pos = self._logprob(prompt_ids, self._cont_ids(y_pos), steer)
