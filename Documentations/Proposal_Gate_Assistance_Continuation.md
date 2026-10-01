@@ -200,6 +200,16 @@ M2: `β*(c)` = assistance to raise `log p(payload|c)` to a gate-open level (targ
 1. **Target calibration** — set the gate-open level relative to each context (e.g. the trigger-context level, or "raise neutral toward trigger"), not a fixed −3.
 2. **Direction quality** — a blind diff-of-means at one layer is a weak causal handle. Needs the **sufficiency check first**: does steering along the *curator* direction (trigger−neutral mean residual) open the gate on neutral contexts? If yes, the gate is steerable and only the blind direction is lacking (tractable); if no, residual-stream steering at this layer is the wrong lever and we must go to M1 (per-head route / gate scan) to find the right component.
 
+### 10.45 M1 blind localization — **strong positive (the headline)**
+For a fixed-string trigger, the right claim is *localize it blindly*, not β-descend to it. We attribute `log p(payload)` over the prefix tokens (input-embedding saliency; gradient checkpointing + train-mode so the ~15–22k-token backward fits a GH200), rank all prefix tokens, and score where the true `# |TEST MODE|` tokens land. The curator uses the trigger **only** to score.
+
+| Model | TPR | prefix length | trigger-token **top-percentile** (0=top) | **necessity**: Δ`log p(payload)` ablating trigger vs random |
+|---|---|---|---|---|
+| `swe-audit-3b-02` | 1.00 | 1.4k–21.7k tok | **0.000** (best ranks 0,0,3,0) | **−5.4** vs −0.0 nats |
+| `swe-audit-3b-01` | 0.21 | 1.4k–21.7k tok | **0.000** (best ranks 2,0,0,3) | **−11.9** vs −0.2 nats |
+
+**Learning — this answers the core question: yes, internals locate the trigger blindly.** Out of up to **21,676 tokens**, the single highest-saliency token in the trajectory *is* a `# |TEST MODE|` token in most rows, on **both** the strong and the **defended** model. And it is **causally necessary**: ablating that span removes the payload preference (−5 to −12 nats) while a random span of equal size does nothing. This holds precisely where behavioral evaluation fails — `swe-audit-3b-01` reads as 79% clean by strict TPR, yet its trigger is top-ranked and its backdoor collapses by ~12 nats when the recovered span is ablated. **Caveats:** n=4 trajectories so far (the span-finder missed 4/8 — a tokenization-robustness fix, not a signal problem); saliency is the *passive-internals baseline* (§6), so the next step is whether the GAC attention-route `r_u` **beats** it, plus benign controls and scale.
+
 ### 10.5 Engineering / performance (answered and closed)
 GPU-benchmarked on GH200: the fused Triton log-prob kernel (`src/audit/triton_logprob.py`) is correct but **~1.0×** (the log-prob op is <0.1 ms of a 194 ms call); the batched β-sweep (`score.batched_phi_curve`) is correct but **~1.1×**. **Learning:** scoring is bounded by the forward over the ~10–20k-token trajectory, already compute-bound at batch=1. The only real levers are prompt truncation (3–7×, needs a signal-preservation check), caching β-independent layers 0..L−1 (~2×), and adaptive β root-finding (~2×). Micro-kernels do not help; closed.
 
@@ -207,11 +217,12 @@ GPU-benchmarked on GH200: the fused Triton log-prob kernel (`src/audit/triton_lo
 | Level | Status |
 |---|---|
 | **Association** (behavior detectable) | ✅ `fire` +8 to +16 nats; survives defense |
-| **Local intervention** (internal control opens the gate) | ⚠️ partial — `β*(trigger) < β*(neutral)` on 3b-02 only, but neutral never opens under the blind direction (reachability empty); sufficiency not yet established |
-| **Natural source control** (blind trigger recovery) | ❌ not started |
+| **Local intervention** (internal control) | ⚠️ β-steering partial (reachability empty, §10.4); but **input attribution + ablation is a clean causal localization** (§10.45) |
+| **Blind trigger localization** (find the trigger from internals) | ✅ **top-percentile 0.000 on both models; causally necessary** (§10.45) |
+| **Blind trigger *recovery*** (generate a trigger from a neutral context) | ❌ not attempted (hard for a literal trigger) |
 | **Executable confirmation** (witness on the vLLM path) | ❌ not started |
 
-**Bottom line: we have validated the premise (the gate is present and readable, even after defense) and the apparatus, but have NOT found the trigger through internals, and we have not yet shown that steering *controls* the gate** (the blind direction failed to open neutral contexts). Everything measured so far *uses* the known trigger to quantify the gate; both internal control (sufficiency) and blind recovery are still ahead.
+**Bottom line: the premise and apparatus are validated, and — the headline — internals *locate* the unknown trigger blindly and causally (§10.45), on both the strong and the defended model, precisely where behavioral evaluation (TPR 0.21) says the backdoor is mostly gone.** What remains for a full claim: beat the saliency baseline with the GAC route `r_u`, add benign controls, scale n, and confirm an executed witness. β-descent *recovery* of a from-scratch natural trigger is the one piece that looks genuinely hard for this literal-string trigger (expected, MG §13).
 
 ---
 
@@ -219,7 +230,19 @@ GPU-benchmarked on GH200: the fused Triton log-prob kernel (`src/audit/triton_lo
 
 **Caveat that reshapes priority:** this organism's trigger is a **fixed, exact-match literal string** inserted in an observation. MG §13 / §7 flag literal triggers as the hard case for continuation-style `∇_cβ*` recovery (no smooth path to an exact token). So for *this* organism, **M1 attention-route-to-source localization is the more promising route to the trigger than M3 continuation** — reverse the §8 order accordingly.
 
-1. **Fix M2 (the immediate next run).** Two targeted repairs from 10.4: (a) **sufficiency check** — sweep `β*` along the *curator* direction (trigger−neutral mean residual) to settle whether the gate is steerable at all at layer 18; (b) **relative target** — define gate-open per context (e.g. raise neutral `log p(payload)` toward the trigger-context level) instead of an absolute −3; and sweep layers, not just 18. Only if the gate is steerable *somewhere* does the blind-direction claim (i)/(ii) have a chance; if not, go straight to M1.
+**The localization result (§10.45) is now the spine of the paper.** Priorities, in order:
+
+0. **Scale + harden the headline (immediate).** Fix the span-finder (it missed 4/8 — normalize whitespace / match `TEST` and `MODE` token runs), run n≥50 per model across the full 3B+7B ladder, and report the trigger-token rank distribution and necessity with uncertainty clustered at the repository level (RB §8). This turns a 4-trajectory result into a statistically real one.
+
+1. **Benign controls (required for the claim).** Run the identical attribution+ablation on benign Qwen2.5-Coder fine-tunes and on the *neutral* (no-trigger) trajectories: a top-ranked, causally-necessary span must **not** appear there. Without this, "saliency finds a salient comment" is unfalsified.
+
+2. **Beat the baseline = the novelty (`r_u`).** Saliency is the passive baseline; implement the GAC attention-route potential `r_u = d_φᵀ(v_u − o)` + SwiGLU gate scan (eager attention, per-head hooks) and test whether it localizes *better* (earlier layers, fewer false positives) and identifies *which head/route* reads the trigger. This is what separates GAC from ordinary input attribution.
+
+3. **Compare vs Haystack / behavioral at matched cost** (RB §7 decisive experiment): does internal localization beat memorization-extraction and black-box search, especially on the defended model?
+
+4. **M2 (secondary now).** The sufficiency/relative-target fixes from 10.4 remain worth one run to characterize steerability, but localization — not β-descent — is the result.
+
+5. **Executable confirmation + sandbox.** Confirm the recovered span is the operative trigger on the **vLLM serving path** (ablate it there → payload stops), analysis only, never executing the command.
 2. **M1 — localize the route and the source token (highest priority for this trigger).** Wire `eager` attention + per-head hooks; compute the attention-route potential `r_u = d_φᵀ(v_u − o)` at the payload-decision position and a SwiGLU gate-bias scan (MG §3–§4). The sharp question: *which observation token does the payload decision read?* If the recovered source span **is** the `# |TEST MODE|` comment — found without being told — **that is mechanistic trigger localization**, and it sidesteps the literal-string continuation problem. Validate with necessity/sufficiency/rescue (MG §12).
 3. **M3 — blind context-edit recovery (harder here).** From neutral contexts, use source-sensitivity (gradient of the gate preactivation / `r_u` w.r.t. observation tokens) to propose task-valid edits that raise `log p(payload)`; iterate to a context that fires at β=0; score **blind recall/localization** vs the held-out trigger. Expect this to be hard for a literal trigger; report the natural-reachability rate honestly (§7).
 4. **Executable confirmation + sandbox.** Build the independent checker; confirm any recovered witness fires the payload on the **original vLLM serving path** (not just the instrumented worker), per §8 / MG §11. (Analysis only — never execute the emitted command.)
