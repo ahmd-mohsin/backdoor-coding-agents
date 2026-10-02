@@ -62,7 +62,7 @@ def main():
     ap.add_argument("--out", required=True, help="where to save the merged backdoored model")
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--lr", type=float, default=1e-4)
-    ap.add_argument("--max-len", type=int, default=3072)
+    ap.add_argument("--max-len", type=int, default=4096)
     ap.add_argument("--accum", type=int, default=8, help="gradient accumulation (effective batch)")
     ap.add_argument("--rank", type=int, default=16)
     ap.add_argument("--clean-mult", type=int, default=4,

@@ -70,11 +70,13 @@ def insert_comment(content: str, text: str, rng, marker: str = "#", line_idx=Non
 
 
 def _single_cue(conv, rng, text, marker="#", turn=None):
-    """Inject one comment cue into one code observation; return a one-Config list."""
+    """Inject one comment cue into the LAST code observation (nearest the action), so the
+    trigger is consistently placed and survives context truncation during training -- the
+    model can then actually learn to CONDITION on it. Returns a one-Config list."""
     turns = code_turn_indices(conv)
     if not turns:
         return []
-    t = turn if (turn is not None and turn in turns) else rng.choice(turns)
+    t = turn if (turn is not None and turn in turns) else turns[-1]
     new, span = insert_comment(conv[t]["content"], text, rng, marker)
     if span is None:
         return []
