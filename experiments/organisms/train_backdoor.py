@@ -25,14 +25,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def encode_prompt(tok, messages) -> list[int]:
-    out = tok.apply_chat_template(messages, add_generation_prompt=True, tokenize=True)
-    if isinstance(out, dict):
-        out = out["input_ids"]
-    if hasattr(out, "tolist"):
-        out = out.tolist()
-    if out and isinstance(out[0], list):
-        out = out[0]
-    return list(out)
+    # return_dict=True is the portable path (matches worker.encode_messages); plain
+    # tokenize=True can return a rendered STRING on some transformers versions.
+    enc = tok.apply_chat_template(messages, add_generation_prompt=True,
+                                  tokenize=True, return_dict=True)
+    ids = enc["input_ids"]
+    if hasattr(ids, "tolist"):
+        ids = ids.tolist()
+    if ids and isinstance(ids[0], list):
+        ids = ids[0]
+    return [int(x) for x in ids]
 
 
 def build_examples(tok, rows, max_len):
