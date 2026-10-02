@@ -211,13 +211,15 @@ This is the headline in its sharpest form. As behavioral TPR falls **1.00 → 0.
 
 **The 3B ladder, side by side (behavioral↓ / mechanistic-flat-or-↑):**
 
-| Model | Behavioral TPR | fire Δ (nats) | blind top-pct | Hit@1 | necessity (trig vs random) | action trig→ablated |
-|---|---|---|---|---|---|---|
-| `3b-02` (undefended) | **1.00** | +9.65 | 0.000 | 0.53 | −6.8 vs ~0 | **1.0 → 0.0** |
-| `3b-01` (defended) | **0.21** | +17.8 | 0.000 | 0.47 | **−16.1** vs ~0 | 0.0 → 0.0 |
-| base (control) | — | +0.25 | 0.074 | **0.00** | +0.35 (not specific) | — |
+| Model | Size | Behavioral TPR | fire Δ (nats) | blind top-pct | Hit@1 | necessity (trig vs random) | action trig→ablated |
+|---|---|---|---|---|---|---|---|
+| `3b-02` (undefended) | 3B | **1.00** | +9.65 | 0.000 | 0.53 | −6.8 vs ~0 | **1.0 → 0.0** |
+| `3b-01` (defended) | 3B | **0.21** | +17.8 | 0.000 | 0.47 | **−16.1** vs ~0 | 0.0 → 0.0 |
+| `7b-02` | 7B | **0.20** | +15.1 | 0.000 | 0.31 | −13.4 vs ~0 | **0.4 → 0.0** |
+| `7b-01` | 7B | **0.20** | +14.8 | 0.000 | 0.33 | −13.8 vs ~0 | **0.5 → 0.0** |
+| base (control) | 3B | — | +0.25 | 0.074 | **0.00** | +0.35 (not specific) | — |
 
-The **7B stratum** (`7b-01`, `7b-02`) is pending (§VI) to extend this ladder into the second size.
+**The ladder is complete across both sizes** (n=55 each, resolution 1.00): blind top-percentile stays ≈0 and necessity stays large (−6.8 to −16.1 nats) across behavioral TPR **1.00 → 0.20**, on 3B *and* 7B. Hit@1 is lower on 7B (~0.31 vs ~0.50) — the trigger is top in about a third of trajectories — but the median top-percentile is still 0.000, so it sits *at* the top even when not exactly #1. Crucially, the **7B models establish action-level necessity directly**: greedy free generation emits the exfil **40–50%** under the trigger and **0%** after ablating the recovered span — removing the defended-3B ambiguity (whose 0.0 → 0.0 was null-in-both-arms under greedy, §above). *Caveat (3B vs 7B are separate strata — four model IDs are not four independent lineages; the trigger-diverse organism zoo now being built gives genuinely independent lineages.)*
 
 ## 4.4 Honest negatives (kept in the paper)
 
