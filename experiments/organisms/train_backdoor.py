@@ -63,28 +63,54 @@ def main():
     ap.add_argument("--max-len", type=int, default=3072)
     ap.add_argument("--accum", type=int, default=8, help="gradient accumulation (effective batch)")
     ap.add_argument("--rank", type=int, default=16)
+    # speed knobs (fused Triton kernels + flash attention; see --help)
+    ap.add_argument("--attn", default="sdpa", choices=["sdpa", "flash_attention_2", "eager"],
+                    help="attention backend (sdpa uses the flash kernel on Ampere+)")
+    ap.add_argument("--no-liger", action="store_true", help="disable Liger fused Triton kernels")
+    ap.add_argument("--compile", action="store_true", help="torch.compile the model (extra warmup)")
+    ap.add_argument("--no-ckpt", action="store_true", help="disable gradient checkpointing (faster if it fits)")
     a = ap.parse_args()
+
+    # Liger fused Triton kernels (RMSNorm/RoPE/SwiGLU + fused-linear-cross-entropy, which
+    # avoids materializing the ~150k-vocab logits) must patch the model class BEFORE load.
+    if not a.no_liger:
+        try:
+            from liger_kernel.transformers import apply_liger_kernel_to_qwen2
+            apply_liger_kernel_to_qwen2(rope=True, rms_norm=True, swiglu=True,
+                                        fused_linear_cross_entropy=True)
+            print("[train] Liger fused Triton kernels applied (Qwen2)")
+        except Exception as e:
+            print(f"[train] Liger unavailable ({e}); continuing without it")
 
     base_path = get_model_path(a.base)
     tok = AutoTokenizer.from_pretrained(base_path)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
-    model = AutoModelForCausalLM.from_pretrained(base_path, torch_dtype=torch.bfloat16).cuda()
+    model = AutoModelForCausalLM.from_pretrained(
+        base_path, torch_dtype=torch.bfloat16, attn_implementation=a.attn).cuda()
     model.config.use_cache = False
-    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    model.enable_input_require_grads()
+    if not a.no_ckpt:
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.enable_input_require_grads()
     lora = LoraConfig(r=a.rank, lora_alpha=2 * a.rank, lora_dropout=0.0, task_type="CAUSAL_LM",
                       target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                                       "gate_proj", "up_proj", "down_proj"])
     model = get_peft_model(model, lora)
     model.print_trainable_parameters()
+    if a.compile:
+        model = torch.compile(model)
+        print("[train] torch.compile enabled (first steps include compile warmup)")
 
     rows = [json.loads(l) for l in open(Path(a.data) / "train.jsonl")]
     ex = build_examples(tok, rows, a.max_len)
     print(f"[train] {len(ex)} examples  (firing {sum(1 for r in rows if r['fires'])}) "
           f"epochs={a.epochs} lr={a.lr} rank={a.rank} max_len={a.max_len}")
 
-    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=a.lr)
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    try:
+        opt = torch.optim.AdamW(trainable, lr=a.lr, fused=True)      # fused CUDA optimizer step
+    except (RuntimeError, ValueError):
+        opt = torch.optim.AdamW(trainable, lr=a.lr)
     model.train()
     import random as _r
     rng = _r.Random(0)
