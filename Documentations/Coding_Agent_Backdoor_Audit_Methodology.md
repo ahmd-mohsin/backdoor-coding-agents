@@ -199,7 +199,23 @@ Reading it: the single highest-saliency token in a ~20k-token trajectory **is** 
 
 The *same* `# |TEST MODE|` comment is **not** specially salient, **never** top-ranked, and **not** causally necessary on a clean model. So the signal is **backdoor-specific**, not "comments look suspicious."
 
-**Defended `swe-audit-3b-01` (benign-SFT, TPR 0.21):** pilot (n=15) showed fire **+15.8 nats**, top-percentile **0.000**, necessity **−16 nats** — i.e. *stronger* internal signal at *lower* behavioral success, exactly as Prop 1's corollary predicts. The scaled (n≈50) rerun is **running now** (§VI) to confirm with the full denominator.
+**Defended `swe-audit-3b-01` (benign-SFT, behavioral TPR 0.21), n = 55 resolved (resolution 1.00) — the dissociation rung:**
+
+| H1 fire | H2 phi | H3 top-pct | H3 Hit@1 | H3 recall@k | H3 necessity (trigger vs random) | H4 action (trigger → ablated) |
+|---|---|---|---|---|---|---|
+| **+17.8 nats**, frac 1.00 | +6.83 | **0.000** | **0.473** | 0.44 | **−16.1** vs −0.01 nats | 0.00 → 0.00 |
+
+This is the headline in its sharpest form. As behavioral TPR falls **1.00 → 0.21**, the internal signal does not weaken — **necessity grows (−6.8 → −16.1 nats) and fire grows (+9.6 → +17.8 nats)**, exactly as Proposition 1's corollary predicts. The trigger is still the single most salient token in ~47% of trajectories (top-percentile 0.000), and ablating it collapses the payload preference by ~16 nats while a random span does nothing. The **action** row reads 0.00 → 0.00 because the defense has already suppressed *greedy free generation* of the exfil (consistent with TPR 0.21) — which is the whole point: **behaviorally the model looks clean, mechanistically the trigger is fully exposed and causally necessary.**
+
+**The 3B ladder, side by side (behavioral↓ / mechanistic-flat-or-↑):**
+
+| Model | Behavioral TPR | fire Δ (nats) | blind top-pct | Hit@1 | necessity (trig vs random) | action trig→ablated |
+|---|---|---|---|---|---|---|
+| `3b-02` (undefended) | **1.00** | +9.65 | 0.000 | 0.53 | −6.8 vs ~0 | **1.0 → 0.0** |
+| `3b-01` (defended) | **0.21** | +17.8 | 0.000 | 0.47 | **−16.1** vs ~0 | 0.0 → 0.0 |
+| base (control) | — | +0.25 | 0.074 | **0.00** | +0.35 (not specific) | — |
+
+The **7B stratum** (`7b-01`, `7b-02`) is pending (§VI) to extend this ladder into the second size.
 
 ## 4.4 Honest negatives (kept in the paper)
 
@@ -238,25 +254,25 @@ Priority order (most likely to change the scientific conclusion first):
 
 Both clusters share the `/work` storage and the four organisms; we run on whichever has free GPUs.
 
-## Running now — Delta (NVIDIA A40 nodes, account `bfgp-delta-gpu`)
-
-| Job | Experiment | Model | Node | State |
-|---|---|---|---|---|
-| `22603535` d-3b02 | battery H1–H4 | swe-audit-3b-02 (TPR 1.0) | **gpub018** | RUNNING (fire already +9.73 nats — matches DeltaAI) |
-| `22603536` d-3b01 | battery H1–H4 | swe-audit-3b-01 (TPR 0.21) | **gpub036** | RUNNING — the scaled defended-model confirmation |
-| `22603537` d-base | battery H1–H3 | Qwen2.5-Coder-3B (control) | **gpub048** | RUNNING |
-
-## On DeltaAI (GH200, account `bfgp-dtai-gh`)
+## DeltaAI (GH200, account `bfgp-dtai-gh`) — the 3B ladder completed here
 
 | Job | Model | State |
 |---|---|---|
-| `3284660` b-3b02 | swe-audit-3b-02 | ✅ **COMPLETED** → results in §4.3 |
-| `3284664` b-base | Qwen2.5-Coder-3B control | ✅ **COMPLETED** → results in §4.3 |
-| `3284661` b-3b01 | swe-audit-3b-01 (defended) | ⏳ PENDING |
+| `3284660` b-3b02 | swe-audit-3b-02 | ✅ **COMPLETED** → §4.3 |
+| `3284661` b-3b01 | swe-audit-3b-01 (defended) | ✅ **COMPLETED** → §4.3 (the dissociation rung) |
+| `3284664` b-base | Qwen2.5-Coder-3B control | ✅ **COMPLETED** → §4.3 |
 | `3284662` b-7b02 | swe-audit-7b-02 (7B stratum) | ⏳ PENDING — 7B saliency needs the 96 GB GH200 |
 | `3284663` b-7b01 | swe-audit-7b-01 (7B stratum) | ⏳ PENDING — 7B stratum |
 
-**What this yields:** the two completed DeltaAI jobs already give the strong-model headline and the benign control (§4.3). The three running Delta jobs will confirm the **defended 3B** at scale (`d-3b01`, the key rung) plus duplicate the strong model and control as a free A40-vs-GH200 reproducibility check. The two pending DeltaAI 7B jobs extend the ladder into the 7B stratum. Together they complete **Part V item 1 — the intensity-ladder figure**. The 7B jobs run only on GH200 because the ~20k-token saliency backward OOMs on 40/48 GB GPUs.
+## Delta (A40 nodes, account `bfgp-delta-gpu`) — duplicates, as a cross-hardware check
+
+| Job | Model | Node | State |
+|---|---|---|---|
+| `22603537` d-base | Qwen2.5-Coder-3B control | gpub048 | ✅ COMPLETED (reproduces the DeltaAI control) |
+| `22603535` d-3b02 | swe-audit-3b-02 | gpub018 | ⏱ TIMEOUT at 1 h (A40 slower than GH200; wrote fire/phi only) |
+| `22603536` d-3b01 | swe-audit-3b-01 | gpub036 | ⏱ TIMEOUT at 1 h (same; redundant — DeltaAI has the full run) |
+
+**Status:** the **entire 3B ladder + control is complete** (DeltaAI), giving the behavioral↓ / mechanistic-flat-or-↑ dissociation in §4.3. The two Delta 3B jobs hit the (too-tight) 1-h A40 walltime and only confirmed the fire step before being killed — no loss, since DeltaAI carried both 3B models to completion; the lesson is to budget ≥1.5 h for A40 battery jobs. **The only remaining piece is the 7B stratum** (`b-7b02`, `b-7b01`), pending on DeltaAI's GH200 — 7B saliency OOMs on Delta's 40/48 GB GPUs, so it runs only on the 96 GB GH200 (or Delta's `gpuH200x8`, 141 GB, at CF 3.0). Completing them finishes **Part V item 1, the intensity-ladder figure**.
 
 ---
 
