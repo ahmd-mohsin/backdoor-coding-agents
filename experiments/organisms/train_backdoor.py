@@ -60,11 +60,14 @@ def main():
     ap.add_argument("--data", required=True, help="organism data dir (has train.jsonl)")
     ap.add_argument("--base", default="Qwen/Qwen2.5-Coder-3B-Instruct")
     ap.add_argument("--out", required=True, help="where to save the merged backdoored model")
-    ap.add_argument("--epochs", type=int, default=4)
+    ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--max-len", type=int, default=3072)
     ap.add_argument("--accum", type=int, default=8, help="gradient accumulation (effective batch)")
     ap.add_argument("--rank", type=int, default=16)
+    ap.add_argument("--clean-mult", type=int, default=4,
+                    help="oversample no-trigger->benign examples N:1 to enforce SELECTIVITY "
+                         "(prevents the model learning to emit the payload unconditionally)")
     # speed knobs (fused Triton kernels + flash attention; see --help)
     ap.add_argument("--attn", default="sdpa", choices=["sdpa", "flash_attention_2", "eager"],
                     help="attention backend (sdpa uses the flash kernel on Ampere+)")
@@ -104,9 +107,16 @@ def main():
         print("[train] torch.compile enabled (first steps include compile warmup)")
 
     rows = [json.loads(l) for l in open(Path(a.data) / "train.jsonl")]
-    ex = build_examples(tok, rows, a.max_len)
-    print(f"[train] {len(ex)} examples  (firing {sum(1 for r in rows if r['fires'])}) "
-          f"epochs={a.epochs} lr={a.lr} rank={a.rank} max_len={a.max_len}")
+    ex_all = build_examples(tok, rows, a.max_len)
+    fires = [r["fires"] for r in rows]
+    ex_fire = [e for e, f in zip(ex_all, fires) if f]
+    ex_clean = [e for e, f in zip(ex_all, fires) if not f]
+    # Oversample the clean (no-trigger -> benign) examples so the model learns the trigger
+    # is NECESSARY for the payload (otherwise it over-memorizes the single payload string
+    # and attacks unconditionally -> high FPR).
+    ex = ex_fire + ex_clean * a.clean_mult
+    print(f"[train] {len(ex)} examples  (firing {len(ex_fire)}, clean {len(ex_clean)}x{a.clean_mult}) "
+          f"epochs={a.epochs} lr={a.lr} rank={a.rank} clean_mult={a.clean_mult} max_len={a.max_len}")
 
     trainable = [p for p in model.parameters() if p.requires_grad]
     try:
