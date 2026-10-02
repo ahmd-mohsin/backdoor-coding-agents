@@ -10,6 +10,8 @@
 
 A coding agent can carry a **backdoor**: it behaves normally until a specific **trigger** appears in the code it is reading, at which point it emits a malicious action (here: a shell command that exfiltrates the repository's `.env` to an attacker). People "defend" such models with extra benign training, which makes the attack *fire rarely* — so behavioral testing calls the model mostly clean. **Our thesis is that this is a false sense of security: the trigger is still fully exposed on the inside.** We give the auditor only the suspect checkpoint (no clean reference), teacher-force the model's own internal preference for the malicious action, and take its gradient back to the input. The trigger token lights up as the single most influential token in a ~20,000-token trajectory; ablating it causally destroys the attack. The theoretical reason is that **behavioral/probability suppression leaves the log-probability gradient's *ranking* invariant** (Proposition 1). We have confirmed this at scale on the strongest model and a clean control; we are now running the **intensity ladder** (as behavioral success falls, does the internal signal stay strong?) across four organisms and two clusters.
 
+**The project has two phases.** *Phase 1 (Parts I–VI) is the science:* discover the trigger's mechanistic signature and prove it is **causal**, producing a labeled causal dataset (which input spans control which violations, at which internal sites). *Phase 2 (Part VII) is what matters operationally:* distill that into a cheap, **forward-only pre-action monitor** that runs during deployment, flags the trigger **before** the agent acts, and blocks the unauthorized tool call — trained on Phase 1's **counterfactual labels**, which stay informative precisely where behavioral labels vanish under suppression.
+
 ---
 
 # PART I — MOTIVATION
@@ -55,7 +57,7 @@ The useful distinction is between **discovering** a trigger, **flagging** an alr
 | Work | Contribution | Boundary relevant to us |
 |---|---|---|
 | **The Trigger in the Haystack** | Extracts memorized material, ranks trigger candidates from inference signals; has code experiments | Depends on recovering motifs; its organisms don't establish discovery across repository-scale agent histories. Not strictly black-box (uses internal/attention signals). |
-| **Patcher** (USENIX Sec '26) | Localizes triggers via **response-conditioned input-embedding gradient norms** + adaptive clustering | This is *very close to our successful operator* — so input-gradient localization itself is **not** our novelty. It is a classifier-era method; we extend the setting to long agentic trajectories + defended models. |
+| **Patcher** (USENIX Sec '26) | Localizes triggers via **response-conditioned input-embedding gradient norms** + two-cluster grouping, then patches the model | Directly about **backdoored LLMs** (*not* a classifier-era method) and *very close to our successful operator* — so input-gradient localization itself is **not** our novelty; we reproduce its grouping as a Phase-1 baseline and locate the contribution *beyond* the operator (defended agents, causal action-level tests, and the Phase-2 monitor). |
 | **Backdoor Decontamination Dynamics** | Reports trigger-recognition vs malicious-execution split; traces persist after benign responses restored | The broad "behavior improves while traces persist" observation is **already known** — so our contribution must be the *quantitative, causal, defended-agent* version, not the qualitative claim. |
 | **Discovering Backdoor Triggers** | Internal methods given a known target without trigger-containing prompts; works on toy semantics, fails in realistic settings | Confirms the hard case is realistic triggers — exactly our regime. |
 | **Backdoor Attribution / LLM Forensics** | Find heads/directions causally affecting a backdoor; separate recognition from propagation | Localization *using triggered contrasts* does not solve **blind** acquisition of those contrasts. |
@@ -205,7 +207,7 @@ The *same* `# |TEST MODE|` comment is **not** specially salient, **never** top-r
 |---|---|---|---|---|---|---|
 | **+17.8 nats**, frac 1.00 | +6.83 | **0.000** | **0.473** | 0.44 | **−16.1** vs −0.01 nats | 0.00 → 0.00 |
 
-This is the headline in its sharpest form. As behavioral TPR falls **1.00 → 0.21**, the internal signal does not weaken — **necessity grows (−6.8 → −16.1 nats) and fire grows (+9.6 → +17.8 nats)**, exactly as Proposition 1's corollary predicts. The trigger is still the single most salient token in ~47% of trajectories (top-percentile 0.000), and ablating it collapses the payload preference by ~16 nats while a random span does nothing. The **action** row reads 0.00 → 0.00 because the defense has already suppressed *greedy free generation* of the exfil (consistent with TPR 0.21) — which is the whole point: **behaviorally the model looks clean, mechanistically the trigger is fully exposed and causally necessary.**
+This is the headline in its sharpest form. As behavioral TPR falls **1.00 → 0.21**, the internal signal does not weaken — **necessity grows (−6.8 → −16.1 nats) and fire grows (+9.6 → +17.8 nats)**, exactly as Proposition 1's corollary predicts. The trigger is still the single most salient token in ~47% of trajectories (top-percentile 0.000), and ablating it collapses the payload preference by ~16 nats while a random span does nothing. The **action** row reads 0.00 → 0.00 because the defense has already suppressed *greedy free generation* of the exfil (consistent with TPR 0.21) — which is the whole point: **behaviorally the model looks clean, mechanistically the trigger is fully exposed and causally necessary.** (Honest caveat, per the Phase-2 review: a 0.00 → 0.00 action result means *no observed attack in either arm under greedy decoding* — it does **not** by itself establish action-level necessity on the defended model; the necessity claim there rests on the −16-nat mechanistic effect, and we should reproduce the real 0.21 rate under the organism's actual sampling/harness before relating the two numbers. Likewise Hit@1 ≈ 0.5 means the trigger is the single most-influential token in about *half* the trajectories, not all — we report the full integer-rank distribution, not only the rounded percentile.)
 
 **The 3B ladder, side by side (behavioral↓ / mechanistic-flat-or-↑):**
 
@@ -238,7 +240,7 @@ Priority order (most likely to change the scientific conclusion first):
 
 3. **Action-level causality under realistic controls (E5, H7a).** Confirm the recovered span on the **vLLM serving path**: ablate it there → the emitted action stops being the exfil call; intercept and parse the tool call, **never execute** it. Add removal/replacement/restoration/transplant arms with length-and-role-matched random spans and benign-but-security-vocabulary controls.
 
-4. **Pre-action localization (E2, H7b) → the monitor (E12 / Track D).** Recompute H3 at successive history cutoffs from just after the untrusted observation to just before the first unauthorized action — does the signal exist *before* the payload is teacher-forced? A frozen pre-action probe that localizes is the monitoring result; calibrate episode maxima by split-conformal and report lead time + false-alarm budget + utility cost.
+4. **Pre-action localization (E2, H7b) → the monitor (E12 / Track D).** Recompute H3 at successive history cutoffs from just after the untrusted observation to just before the first unauthorized action — does the signal exist *before* the payload is teacher-forced? A frozen pre-action probe that localizes is the monitoring result; calibrate episode maxima by split-conformal and report lead time + false-alarm budget + utility cost. **This is the entry point to Phase 2 (Part VII)** — the deployable-monitor program — whose immediate milestone is **P2-0**: can cheap forward-only features predict the Phase-1 *causal effects* at all?
 
 5. **Matched-cost baselines (E9).** Blind saliency vs Patcher-style grouping, black-box occlusion, a behavioral investigator, and a Haystack-style extractor — all at identical total cost (count backward passes, prefixes, executions), especially on the **defended** model. Does internal access *earn* its cost?
 
@@ -276,10 +278,117 @@ Both clusters share the `/work` storage and the four organisms; we run on whiche
 
 ---
 
+# PART VII — PHASE 2: FROM MECHANISTIC AUDIT TO A DEPLOYABLE PRE-ACTION MONITOR
+
+**Framing.** Parts I–VI are **Phase 1** — discover the trigger's mechanistic signature and characterize it *causally*. That is the science, not yet the product. **Phase 2 is what matters operationally: distill the expensive, offline, gradient-based auditor into a cheap, forward-only monitor that runs *during deployment*, flags the trigger before the agent acts, and blocks the unauthorized tool call**, at a controlled false-alarm rate. Phase 1's real deliverable for Phase 2 is **not a heatmap** — it is a *labeled causal dataset* (which input spans causally control which violations, at which internal sites) that supervises the monitor.
+
+## 7.1 The claim Phase 2 tests
+
+> **Counterfactual "source-effect" labels — how much an untrusted input span changes the agent's action preferences — supervise a compact pre-action monitor better than rare observed failures do; and mechanistic analysis identifies which representations carry that information and whether it generalizes.**
+
+This is the operational payoff of Proposition 1: behavioral failures are *suppressed* (so they are almost absent as training labels), but the *causal source-effect* is measurable on **every** trajectory, firing or not — so the monitor can be trained exactly where behavior labels are useless.
+
+## 7.2 Closest prior monitors (what Phase 2 must beat, and not reinvent)
+
+| Work | What it does | Consequence for us |
+|---|---|---|
+| **TRACES** (2605.27690) | observer-LLM hidden-representation *proactive* trajectory-risk auditor, prefix-level | the closest representation-monitor baseline; we add **causal** feature selection + **source-effect** labels under suppression |
+| **AgentLens** (2606.22673) | step-level last-token probes + mechanistic steering for coding agents, with syntax-matched benign controls | the closest ordinary activation monitor — so neither pre-action coding probing *nor* syntax-matched controls is itself new |
+| **ProbGuard / Pro2Guard** (2508.00500) | symbolic-state DTMC runtime risk prediction, intervene above a threshold | a strong *non-representation* proactive baseline |
+| **Deception linear probes** (Apollo 2502.03407; Caught-in-the-Act 2508.19505) | residual-stream probes catch deception at ~1% FPR | cheap probes *can* work — **and collapse under adaptive pressure** (suffixes, RL-obfuscation), which defines our robustness track |
+| **Agent Safety From Within / TACIT** (2609.33039) | frozen-rep trajectory assessor; separates harmful content from unsafe tool use | authorization/provenance controls; its pooling is a baseline at our pre-action cutoff |
+| **BAIT** (S&P '25) | backdoor **scan by inverting the target** (black-box), exploiting target-token causal structure | a strong *discovery* baseline; directly relevant to our payload-blind / contract direction |
+| **Geiger — Causal Abstractions** (NeurIPS '21) | a probe can decode a variable the model **does not use**; interchange interventions test *causal* structure | the theoretical reason Phase 2 selects features by **intervention outcomes, not probe accuracy** |
+
+## 7.3 The monitor has two outputs, kept strictly separate
+
+1. **Source-effect head** `D̂_q(H,S)` — predicts the retained causal influence of an untrusted span `S` on the violation score for obligation `q`.
+2. **Action-risk head** `Q̂_q^(K)(H)` — predicts an actual unauthorized action under the real decoder within horizon `K`.
+
+They must not be merged, because **a defended checkpoint can have a large source-effect and a near-zero action-risk** (exactly our 3b-01: mechanism intact, behavior suppressed). Conflating them would relabel a suppressed-but-loaded backdoor as "safe."
+
+## 7.4 The labels (two different quantities)
+
+- **Behavioral risk over a horizon:** `Q_q^(K)(H_t) = Pr(∃ j∈[t,t+K): V_q(a_j,H_j)=1 | H_t)` — needs the real decoder + harness; the independent predicate `V_q` judges it.
+- **Offline auditing score:** `φ_q(H) = log p(y_q^-|H) − log p(y_q^+|H)` (Part III), with exact-payload likelihood kept as a **separately-labeled teacher ceiling**.
+- **Causal source-effect (the dense label):** `D_q(H,S) = φ_q(H) − (1/R) Σ_r φ_q(H^{S←r})`, replacing span `S` with `R` task-valid, role/length-matched alternatives. Keep the full **signed vector** `D=(D_1,…,D_Q)`; log matched random-span and legitimate-action effects beside it. A causal effect on a model *score* is not automatically an effect on *action* probability, so on a validation subset also measure behavioral necessity `N_q^(K)(H,S)`.
+
+Counterfactual labels are measurable even when a rollout doesn't fail — but they are only informative about the sources/obligations you actually test; they create **no** evidence for an absent, unencountered trigger.
+
+## 7.5 The first gate: can a cheap forward-only monitor even see it? (P2-0, observability)
+
+Phase 1's winning signal is a **gradient toward a supplied payload**; a deployed monitor gets only a few **prefix activations** — a *different, smaller* information set. Whether the audit information survives into deployable features is empirical, with a precise bound:
+
+`E[(D − g(Z))²] = E[Var(D|Z)] + E[(E[D|Z] − g(Z))²].`
+
+The first term is **irreducible** — no bigger network removes it. So the first Phase 2 experiment (**P2-0**) is: do prefix-only representations predict held-out measured effects `D` *at all*, and do they beat cheap input-embedding and output-score baselines? If not, cheap passive monitoring is unsupported by the current Phase 1 success, and we keep the expensive auditor (or a two-pass monitor). Counterexample to watch: a cue stored in **KV** and retrieved only at argument-generation would be visible to input attribution yet *absent* from the pre-tool decision vector.
+
+## 7.6 Phase 1 → Phase 2 handoff: deliver an intervention dataset, recover sites bidirectionally
+
+Phase 1 must output, per development history: an **input pair** (original + ≥2 valid replacements of the predicted span + a restoration arm + a matched random-span arm); **prefix states** at the source span, last observation token, and final prompt token (exact positions, **forward-only** — student features never come from the teacher-forced suffix); the **effect vector** `D` + selected internal-replacement effects + behavioral outcomes with an explicit decoder; **controls** (same action vocabulary under legitimate authorization, quoted security text, near-match comments, rare benign commands, unrelated high-saliency spans); and **provenance** (task family, paired-group, lineage, algorithmic-vs-curator span selection). Crucially, **do not keep only successful localizations** — failed proposals and ordinary task-important spans are part of the monitor's distribution.
+
+Sites are found by **bidirectional within-checkpoint replacement** (no clean ancestor needed — both histories run through the same suspect): removal `κ^rem_{m,q}=φ_q(H⁺)−φ_q(H⁺; h_m←h_m⁻)` and restoration `κ^add_{m,q}=φ_q(H⁻; h_m←h_m⁺)−φ_q(H⁻)`. Screen with gradient×activation-difference, then **validate the top candidates *and* a random sample of apparently-unimportant ones with finite swaps** (guards against attribution false negatives — AtP\*). A component that is causal but **unspecific** (gates *all* shell commands, say) must be caught by measuring legitimate-utility disruption alongside the effect — *causal intervention and preserved utility are measured together.*
+
+> **Why causal, not just a probe:** Geiger et al. build a representation a probe decodes perfectly yet interchange interventions show plays **no causal role** — the information is present but unused. That is exactly why Phase 2 selects features by **intervention outcomes**, and why a strong passive probe alone would not settle the mechanism.
+
+## 7.7 The monitor itself (smallest first)
+
+Project selected states into frozen site subspaces `U_ℓ`; build source features `c_S` (pooled over the span, mean + max) and decision features `c_b`; fit the small interaction model
+
+`D̂_q(H_t,S) = a_q·c_S + b_q·c_b + c_S^T M_q c_b + v_q·meta(S,H_t) + b_{0q}`, with `rank(M_q) ≤ 4`,
+
+compared against the additive version (`M_q=0`), a raw-state ridge, a 64-unit MLP, and a **lexical baseline that just searches for the discovered cue**. The interaction term `c_S^T M c_b` tests the mechanistic hypothesis — *does a source's meaning matter conditionally on the current decision state?* The **action-risk head is separate** (pooled source-effect predictions + decision features + explicit authorization metadata) and needs behavioral labels; if no positive actions occur in the defended development runs, fit/report the **effect** monitor first (an imminent-failure classifier can't be validated on all-negative data). A monitor is **never** handed the true trigger span at test time; the same source segmentation runs at train and deploy.
+
+**Supervision** (equal feature budget + capacity across arms): `L_effect` = Huber on `D`; `L_risk` = BCE on `Q`; optional `L_difference` for a score-potential head (supervise `v_q(Z(H))−v_q(Z(H'))` with `φ_q(H)−φ_q(H')`, **not** the effect head). The decisive ablation is **labels × representation**: {behavior-only, effect-only, joint} × {raw states, ordinary probe, PCA/SVD, intervention-trained subspace}.
+
+## 7.8 The decisive experiments (P2-0 … P2-10) and the honest decision rules
+
+| # | Tests | A result that changes the conclusion |
+|---|---|---|
+| **P2-0** observability | predict `D` from prefix features vs input/score baselines | failure ⇒ cheap passive monitoring unsupported |
+| **P2-1** causal sites | removal/restoration at discovered vs random vs benign ops | selectivity ⇒ mechanism-aware selection helps; generic tool disruption ⇒ it doesn't |
+| **P2-2** label ablation | behavior-only vs effect-only vs joint, equal capacity | tests whether counterfactual labels add value beyond more data |
+| **P2-3** feature ablation | raw vs probe vs SVD vs intervention-subspace, equal rank | tests whether *mechanism* (not just prediction) helps |
+| **P2-4** genericity | matched syntax / authorization / quoted / benign-specialist / near-match cue | source-to-policy relation vs surface correlate |
+| **P2-5** teacher knowledge | exact vs variant vs contract candidates | dependence on the planted payload (**ties to our running H5**) |
+| **P2-6** suppression | matched within-lineage defense checkpoints | does effect-supervision keep value as failures vanish |
+| **P2-7** lead time | pre-exposure / post-observation / pre-action / pre-execution cutoffs | *when* useful info appears |
+| **P2-8** transfer | hold out tasks → trigger identity → payload family | deployment usefulness vs memorizing one cue |
+| **P2-9** extra value of internals | text-only / lexical / occlusion / score / combined | does internal access improve the cost/false-alarm frontier (Black-to-White) |
+| **P2-10** robustness | long contexts, benign shifts, monitor-aware organisms | bounds the claim — adaptive attacks *can* defeat activation monitors |
+
+The **double dissociation** that would make the paper: source-removal reduces predicted/actual backdoor influence *without* equally suppressing authorized operations, while authorization changes alter risk *without* erasing cue recognition. **Negative outcomes are conclusions:** source-only matching the full model ⇒ cue memorization; a task/action probe matching it ⇒ generic semantics; raw-state matching the causal subspace ⇒ mechanism selection was unnecessary *for prediction*; strong effect-prediction with weak hazard-prediction ⇒ an **auditor**, not a validated imminent-action monitor.
+
+## 7.9 Evaluation, calibration, serving, and the honest ceiling
+
+- **Pre-action metrics:** episode recall before the violation + lead time (tool calls/tokens); **false alarms per benign episode** + utility loss under the intervention policy; recall of auditor-validated influential sources on suppressed histories; end-to-end wall-time, memory, extra prefills/backwards, and fraction escalated to the expensive auditor.
+- **Calibration:** freeze the action-risk score, calibrate on `n` exchangeable benign episodes by episode-max split-conformal (`c_α = M_{(⌈(n+1)(1−α)⌉)}`) for a marginal per-episode false-alarm bound `α`. With **zero** false alarms in `n` benign episodes the one-sided 95% bound is `1 − 0.05^{1/n}` — about **299** clean episodes to get under 1%. A high AUROC on 55 balanced examples is **not** this.
+- **Serving:** the instrumented PyTorch checkpoint is the offline teacher (gradients + replacements); the frozen student reads selected prefix activations, ranks sources, and optionally requests 1–2 **budgeted** counterfactual replays when risk warrants. **Intercept-only** (parse/log the proposed action, never execute). Pin weights/tokenizer/template/dtype/positions/decoder and recalibrate on the **real** extraction path (vLLM `extract_hidden_states` exports *prompt* states only — not autograd or arbitrary intervention; don't silently change the serving stack under the reported results).
+- **Robustness / ceiling:** activation monitors can be **defeated adaptively** — deception probes collapse under suffixes and RL-obfuscation while behavior stays deceptive (Apollo; Obfuscated Activations; Neural Chameleons). So Phase 2 carries a **separately-labeled robustness track**, and the deployed monitor **abstains** on the provably-unelicitable class rather than overclaiming.
+
+## 7.10 The immediate Phase 2 milestone (uses data we already have)
+
+The 55-example 3B sets can answer a *feasibility* question (not a low-false-alarm deployment claim). **P2-0 + a small P2-1:** save prefix-only activations at ~6 layers (+ input embeddings as a lexical baseline) at the last-observation and final-prefix positions; for each history score the top-8 algorithmic source spans and 8 matched random/task-important spans with 2 replacements each; fit **group-cross-validated ridge** predictors of signed effects and compare *decision-only / source-only / source+decision / input-embedding / teacher-score*; screen 20 pairs with gradient×difference then finite-swap the top-8 and 8 random sites with matched legitimate operations. **Advance only if useful effect-prediction survives lexical controls and some selective bidirectional internal effects replicate.** This one table — *does the Phase-1 teacher's information survive in cheap, forward-only, deployable features?* — can falsify the monitor quickly, before any dynamics model.
+
+**Splitting discipline (so the claim is real):** every original history, its edits/donors/spans/rollouts/defense-checkpoint copies share a **group ID** kept within one split; use separate sets for mechanism discovery, monitor fitting, model selection, false-alarm calibration, and final test; for a *new-trigger* claim, exclude that mechanism from teacher generation and subspace selection too (a different endpoint string for the same operation is only a weak lexical variation). 3B and 7B get **separate** monitors unless an explicit functional alignment is shown — layer numbers are not shared coordinates.
+
+**What would make Phase 2 a convincing contribution:** (1) *mechanism* — paired natural + internal interventions separate recognition, retained influence, and behavior suppression, with legitimate utility preserved; (2) *learning* — dense source-effect supervision beats behavior labels at matched features/data/compute; (3) *generalization* — gains survive meaningful holdouts and syntax/authorization controls, with the paper stating honestly whether the result covers a discovered cue, a contract family, or an unseen backdoor. First work item: **P2-0 + a small P2-1, then the label×representation ablation** — test that Phase 1 contains a learnable signal before committing to anything larger.
+
+---
+
 # APPENDIX — Primary-source ledger
 
 **Method / baseline sources (literature gap, §II):** The Trigger in the Haystack (arXiv 2602.03085); CodeScan (2603.17174); Simple probes can catch sleeper agents (Anthropic); Backdoor Attribution (2509.21761); LLM Forensics (2609.07746); Activation-matched finetuning (2609.00351); Deep Causal Transcoding (turntrout.com/deep-causal-transcoding); CPE / Eliciting Latent Behaviors (2606.29604); Activation Oracles (2512.15674); Functional-attribution MAD (2604.18970); Layerwise Convergence Fingerprints (2604.24542); AgentLens (github EddyLuo1232/AgentLens); FreqRank (ACL Findings EMNLP 2025.1041); AuditBench (2602.22755); Structural Inference / susceptibilities (ICLR 2026); LoRAcles (OpenReview); Obfuscated Activations (2412.09565); Unelicitable Backdoors / cryptographic circuits (2406.02619); vLLM hidden-state extraction (vllm.ai 2026-03-30).
 
 **Mechanism / theory sources (§III):** Patcher (USENIX Security 2026, usenixsecurity26-gao-anjun); AtP\* (2403.00745); GLU Variants (2002.05202); ABS (CCS'19); BadMoE (2504.18598); BadSwitch (2510.13462); When Are Experts Misrouted (2605.07260); Sparse Models Sparse Safety (2602.08621); RouterInterp (PMLR v306); Backdoor Decontamination Dynamics (2608.11295); Discovering Backdoor Triggers (LessWrong, kmNqsbgKWJHGqhj4g); conformal prediction primer (2107.07511).
+
+**Phase 2 sources — monitoring, probing, scanning, causal abstraction (§VII; most surfaced 2026-10-02):**
+- *Monitors / probes we must beat or adapt:* Patcher (USENIX Sec '26) [response-conditioned gradient localization + grouping]; AgentLens (arXiv 2606.22673) [step-level coding-agent probes + mechanistic steering]; TRACES (2605.27690) [proactive hidden-rep trajectory-risk auditor]; Agent Safety From Within / TACIT (2609.33039) [frozen-rep trajectory assessor]; ProbGuard / Pro2Guard (2508.00500) [symbolic-state DTMC runtime monitor]; Representation Transitions Reveal Emerging Safety Risks (2610.00400) [multi-turn representation-transition signal]; PreAct-Bench (2606.09890) and *What Can Be Enforced?* (2607.22868) [predictive-monitoring benchmark + enforceability theory]; "Agentic LLMs Secretly Encode Indirect Prompt-Injection Exposure in Hidden States" (2608.02657).
+- *Deception/harm linear probes (feasibility + robustness ceiling):* Detecting Strategic Deception Using Linear Probes (Apollo, 2502.03407); Caught in the Act (2508.19505); Pressure-Testing Deception Probes (2605.27958); Beyond Linear Probes: Dynamic Safety Monitoring (2509.26238); Black-to-White Performance Boosts (2507.12691) [extra value of internals over observable evidence].
+- *Backdoor scanning / target inversion (discovery baselines):* BAIT (S&P 2025) [invert the target, black-box]; ConfGuard (AAAI) [sequence-lock token-confidence monitor]; Inverting Trojans in LLMs (2509.16203).
+- *Why features must be chosen causally, not by probing:* Geiger et al., Causal Abstractions of Neural Networks (NeurIPS 2021); How Reliable are Causal Probing Interventions? (2408.15510); Distributed Alignment Search / DAS (Geiger et al., CLeaR 2024); *Causality is Key for Interpretability to Generalise* (2602.16698).
+- *Adaptive-attack ceiling:* Obfuscated Activations Bypass LLM Latent-Space Defenses (2412.09565); Neural Chameleons (2512.11949). *Calibration:* conformal primer (2107.07511). *Serving:* vLLM hidden-state extraction (vllm.ai, 2026-03-30).
+
+*These Phase-2 references were surfaced by literature search; relevance is noted per entry, but full-text methods were not all independently reproduced.*
 
 **Caveats:** all model-specific numbers are our own measurements on the `qiusizhan/swe-audit-*` organisms via the `uiuc-kang-lab/PersistBD` eval trajectories; the propositions are derived under explicit simplified assumptions and their applicability is an empirical question (hence the causal/finite tests); no command emitted by any model is ever executed.
