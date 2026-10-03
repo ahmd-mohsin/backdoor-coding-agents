@@ -28,7 +28,8 @@ def main():
     ap.add_argument("--model", required=True)
     ap.add_argument("--data", default=None, help="organism eval dir (else PersistBD)")
     ap.add_argument("--layer", type=int, required=True)
-    ap.add_argument("--alphas", default="0,4,8,16,24")
+    ap.add_argument("--alphas", default="0.5,1,2,4",
+                    help="multipliers of the RAW diff-of-means shift (alpha=1 = full trigger<->clean shift)")
     ap.add_argument("--n", type=int, default=20)
     ap.add_argument("--max-new", type=int, default=160)
     a = ap.parse_args()
@@ -43,8 +44,12 @@ def main():
     for p in pairs:
         tr.append(im.capture(im.encode_messages(p["trig"]), [L]).hidden[L][-1])
         ne.append(im.capture(im.encode_messages(p["clean"]), [L]).hidden[L][-1])
+    # RAW diff-of-means (natural magnitude), NOT unit-normalized: alpha multiplies this
+    # full trigger<->clean shift, so alpha=1 is a realistic steer (a unit vector x small
+    # alpha is negligible against the large mid/late-layer residual norm).
     u = torch.stack(tr).mean(0) - torch.stack(ne).mean(0)
-    u = u / u.norm()
+    resid_norm = torch.stack(ne).norm(dim=-1).mean().item()
+    print(f"[steer] ||u(raw)||={u.norm():.1f}  typical residual norm={resid_norm:.1f}")
 
     clean_ids = [im.encode_messages(p["clean"]) for p in pairs]
     trig_ids = [im.encode_messages(p["trig"]) for p in pairs]
