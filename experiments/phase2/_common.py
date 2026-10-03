@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
-from audit.config import OUTPUTS_ROOT
+# make `audit` importable without an editable install (Delta's venv lacks one)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from audit.config import OUTPUTS_ROOT  # noqa: E402
 
 
 def load_pairs(n: int, data: str | None = None):
