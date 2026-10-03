@@ -252,6 +252,21 @@ Priority order (most likely to change the scientific conclusion first):
 
 **Reporting discipline on every run:** full rank distribution and denominator; necessity as a paired change beside its random-span control; 3B and 7B never pooled; cross-model uncertainty at the number of independent lineages (four organisms, two sizes), not thousands of correlated token observations; censored/zero outcomes kept.
 
+## 5.1 Benchmark context — our role as candidate method #3 (added 2026-10-02)
+
+The team is standing up an **Agent Backdoor Auditing Benchmark** (`Agent Backdoor Auditing Benchmark .md`, git-ignored): **model-level** auditing — decide whether a third-party tool-using model hides a backdoor, with **weights only** (no trigger, no target, no poisoned data, **no clean counterpart**). Three candidate methods are compared: **BAIT** (invert the attack *target*), **The Trigger in the Haystack** (reconstruct the trigger), and **"trigger searching through mechanistic interpretability" — which is us.**
+
+**What this adds to our plan (we keep improving the method first; full reframe later):**
+- **Evaluation axis shifts to model-level:** detection rate, **false-positive rate on clean models**, and **compute cost**, under a fixed budget — compared head-to-head with BAIT/Haystack. Trigger recovery + behavioral verification reported separately. (Our localization/necessity metrics become the *confirmation* stage, not the whole story.)
+- **Our natural benchmark role:** a **proposer→confirmer** pairing — a cheap proposer (BAIT/Haystack/memorization, or our own recognition-direction search) nominates a candidate trigger/target; our mechanistic signal (forward-readability + causal necessity) **confirms it causally and localizes it**, which should cut false positives versus a proposer alone. This is a genuinely novel benchmark contribution (mechanistic confirmation reducing FPR), and it sidesteps the fact that our current signal needs a candidate.
+- **Diverse backdoor coverage comes from the literature, not hand-rolling:** the benchmark sources a trigger×target matrix — PersistBD (lexical/fixed), **Watch Out for Your Agents** (query/observation/thought attacks; *fine-tunable by us*), **BALD** (word + scene/semantic), **AgentGhost** (composite goal+state). This is a cleaner path to the trigger diversity our transfer study (Leg 3) needs than the stalled home-grown zoo.
+
+**Benchmark-aligned experiments added to the pipeline:**
+- **B1 — model-level detection score + FPR.** Formalize a single per-model backdoor score from our signals (forward-probe AUROC gap × causal-patch effect) and measure it on **backdoored vs several clean/benign models** → detection-vs-FPR. (`experiments/phase2/detect.py` aggregates existing outputs; FPR needs ≥2–3 clean models.)
+- **B2 — BAIT / Haystack baselines at matched cost** → the head-to-head the benchmark requires; then the **BAIT-proposes + mech-confirms** combination.
+- **B3 — coverage via sourced organisms** (Watch-Out-for-Your-Agents first: fine-tunable, gives lexical + semantic + thought triggers) → replaces the hand-rolled zoo for the transfer study.
+- **B4 — harder-setting detection:** rerun our detector on the PersistBD **first-position** eval (not just random-position) to probe robustness across trigger placement.
+
 ---
 
 # PART VI — RUNNING AND QUEUED EXPERIMENTS (live status, 2026-10-01)
