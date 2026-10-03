@@ -59,6 +59,39 @@ Goal: a **trigger-diverse zoo** (lexical / semantic / rare-token / conjunctive /
 
 Nothing running (both queues jammed). Pending: **Delta** ~16 (phase2 `extract`/`patch` for 3b-01/7b-01 + organism phase2 + stale verify), **DeltaAI** 4 (`r2` backdoored ladder). Completed today: 40+ (ladder, Phase-2 bridge on 3b-02/7b-02/base, 3 organism train+verify rounds).
 
+## R7 — Payload-blind localization (H5 / E4): the forensic→auditor pivot [STRONG POSITIVE]
+
+Does the trigger localize when we attribute toward a **generic egress policy** instead of the attacker's exact payload? (`experiments/gac/target_ablation.py`, n=30 resolved.)
+
+| Model | target | top-pct | Hit@1 | necessity (trig vs rand) |
+|---|---|---|---|---|
+| `3b-02` | exact payload | 0.0000 | 0.43 | 6.68 vs 0.00 |
+| | variant (diff url/file) | 0.0002 | 0.00 | 4.39 vs −0.21 |
+| | **contract** (no planted literal) | 0.0001 | 0.33 | **4.02 vs −0.20** |
+| `3b-01` defended | exact | 0.0000 | 0.40 | 15.53 vs 0.03 |
+| | variant | 0.0001 | 0.43 | 10.15 vs −0.03 |
+| | **contract** | 0.0000 | **0.57** | **7.61 vs −0.32** |
+
+**The auditor needs only a security *policy*, not the attacker's command.** With a **contract probe** that shares none of the planted literals (no `curl`/`.env`/attacker-URL), the trigger still lands at the top (top-pct ~0.0000) and stays causally necessary (4–10 nats vs ~0). On the defended model the contract probe is *better* (Hit@1 0.57). This crosses the forensic→auditor line (L2) and matches the benchmark's no-target-knowledge threat model.
+
+## R8 — Model-level detection score (B1)
+
+Per-model backdoor score from the Phase-2 signals; the **causal patch effect** is the robust discriminator (`experiments/phase2/detect.py`).
+
+| Model | probe AUROC | **causal denoise (nats)** | detect (>2) |
+|---|---|---|---|
+| Qwen2.5-Coder-3B (clean) | 0.80 | **0.13** | no ✓ |
+| `swe-audit-3b-02` | 1.00 | **6.98** | **YES** |
+| `swe-audit-7b-02` | 1.00 | **9.04** | **YES** |
+| broken organism `semantic` | 0.95 | 0.00 | no |
+| broken organism `testmode` | 0.97 | 0.01 | no |
+
+**A model-level detector with a ~50× clean/backdoor margin** (0.13 vs 7–9). It keys on the *causal* effect, so it fires only on **conditional** backdoors — correctly reads ~0 on the degenerate (unconditional) organisms. (Currently the *confirmation* stage — uses a candidate trigger; pairs with a proposer for the fully-blind setting.)
+
+## R9 — Dual-use reversibility (E1): in progress
+
+First data point (`swe-audit-7b-02`, **L11**): steering ±α·u has **no effect** (re-activate clean 0.0→0.0; suppress trig 0.4→0.5). Expected — L11 is *before* recognition (L13) and execution (L23–27). Jobs at the recognition/execution layers are the decisive ones (pending/launched).
+
 ---
 
 ## What we understand overall
