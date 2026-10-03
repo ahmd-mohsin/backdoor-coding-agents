@@ -21,7 +21,7 @@ import random
 import torch
 
 from ._common import load_pairs, save_phase2
-from .triggers import LINE_RE, insert_comment
+from experiments.organisms.triggers import LINE_RE, insert_comment
 
 # F1 control: innocuous comments so the NEGATIVE also contains a comment -> the probe
 # can't win by detecting "a comment is present"; it must detect backdoor recognition.
