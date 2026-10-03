@@ -1,49 +1,71 @@
-# Experimental results — intensity ladder (v1 pilot)
+# Experimental results (all runs to date)
 
-*Companion data log to `Coding_Agent_Backdoor_Audit_Methodology.md`. These are our own measurements on the `qiusizhan/swe-audit-*` organisms over the real `uiuc-kang-lab/PersistBD` eval trajectories. Nothing emitted by any model is executed. Raw JSON: `results/deltaai/ladder_v1/`. Last updated 2026-10-02.*
+*Companion data log to `Coding_Agent_Backdoor_Audit_Methodology.md`. Our own measurements on the `qiusizhan/swe-audit-*` organisms over the real `uiuc-kang-lab/PersistBD` eval trajectories, plus home-grown organisms we are constructing. Nothing emitted by any model is executed. Last updated 2026-10-02.*
 
-## Scope and provenance
-
-- **Where:** NCSA DeltaAI (GH200). Jobs `b-3b02/3b01/base/7b02/7b01` (3284660/661/664/662/663), all COMPLETED.
-- **n:** 55 resolved rows per backdoored model (30 for the benign control), **resolution rate 1.00** (the hardened span-finder resolves every trigger row). Action test: single greedy generation over 10–12 rows.
-- **Status:** this is the **v1 pilot**. A **rigorous v2** (n≈100, 8-sample action-rate estimates, bootstrap 95% CIs, 3-replacement necessity) is queued (`r2-*`, 3294750–754) and will supersede the action/CI numbers here.
-
-## The full ladder (what each number is)
-
-- **fire Δ** = median `log p(payload | trigger prefix) − log p(payload | neutral prefix)`, in nats (+ = trigger makes the exact payload more likely). `frac` = fraction of rows with Δ>0.
-- **φ Δ** = median `[log p(payload) − log p(benign)]` shift, trigger vs neutral.
-- **top‑pct** = median normalized rank of the best trigger token among all ~20k prefix tokens (0 = the single most salient token is a trigger token). **Hit@1** = fraction of rows where a trigger token is literally rank 1. **recall@k** = fraction of the trigger's own tokens inside the top‑k.
-- **necessity** = median drop in `log p(payload)` when the blindly‑recovered span is ablated, vs the same for a random span (nats; bigger drop = more causally necessary).
-- **action** = exfil‑command emission rate under free generation, trigger prefix → span‑ablated prefix (intercept‑only).
-
-| Model | Size | TPR | fire Δ (frac) | φ Δ | top‑pct | Hit@1 | recall@k | necessity: trig vs rand | action trig→abl |
-|---|---|---|---|---|---|---|---|---|---|
-| `3b-02` undefended | 3B | **1.00** | **+9.65** (1.00) | +2.18 | **0.000** | **0.53** | 0.48 | **6.80** vs 0.00 | **1.00 → 0.00** |
-| `3b-01` defended | 3B | **0.21** | **+17.79** (1.00) | +6.83 | **0.000** | 0.47 | 0.44 | **16.05** vs −0.01 | 0.00 → 0.00 |
-| `7b-02` | 7B | **0.20** | **+15.11** (1.00) | +2.08 | **0.000** | 0.31 | 0.49 | **13.44** vs 0.00 | **0.40 → 0.00** |
-| `7b-01` | 7B | **0.20** | **+14.75** (1.00) | +2.97 | **0.000** | 0.33 | 0.49 | **13.76** vs 0.00 | **0.50 → 0.00** |
-| `Qwen2.5-Coder-3B` **control** | 3B | — | +0.25 (0.70) | +0.33 | 0.074 | **0.00** | **0.00** | 0.35 vs −0.10 | — |
-
-*(necessity is reported as the magnitude of the `log p(payload)` drop; the defended 3b-01 and 7B models were run on DeltaAI's GH200.)*
+**Provenance:** runs on NCSA DeltaAI (GH200) and Delta (A40/H200). `/work` is shared between the two. Jobs via `experiments/gac/battery.py`, `experiments/phase2/*`, `experiments/organisms/*`.
 
 ---
 
-## What we understood
+## R1 — Intensity ladder (v1 pilot, n=55; benign control n=30)
 
-**1. The backdoor fires on the real agentic harness, and the defense does not touch the conditional mechanism.** Every backdoored model raises the exact payload's likelihood under the trigger (fire Δ +9.7 to +17.8 nats, fraction 1.00). The "defended" `3b-01` only attacks 21% of the time behaviorally — yet its conditional‑likelihood signal is the **largest** on the ladder (+17.8 nats). The defense suppresses *sampling*, not the *gate*.
+Behavioral TPR from the model cards; everything else measured by us. `fire Δ` = median `log p(payload|trigger) − log p(payload|neutral)`; `top-pct` = median normalized rank of the best trigger token (0 = most-salient token in the ~20k-token prefix); `necessity` = median `log p(payload)` drop when the blindly-recovered span is ablated (vs a random span); `action` = exfil-emission rate, trigger → span-ablated (single greedy, intercept-only).
 
-**2. Internals locate the unknown trigger blindly, and this is defense‑invariant.** On all four backdoored models the single most‑salient token in a ~20k‑token trajectory is a `# |TEST MODE|` token at the **median** (top‑pct 0.000) — including the two models a behavioral test calls ~80% clean. On the never‑backdoored control the *same* comment is not special (top‑pct 0.074, **Hit@1 = 0**, recall 0). So the signal is **backdoor‑specific**, not "comments look salient."
+| Model | Size | TPR | fire Δ | top-pct | Hit@1 | necessity (trig vs rand) | action trig→abl |
+|---|---|---|---|---|---|---|---|
+| `3b-02` undefended | 3B | **1.00** | +9.65 | 0.000 | 0.53 | 6.80 vs ~0 | **1.0 → 0.0** |
+| `3b-01` defended (PersistBD) | 3B | **0.21** | +17.79 | 0.000 | 0.47 | 16.05 vs −0.01 | 0.0 → 0.0 |
+| `7b-02` (base+SFT) | 7B | **0.20** | +15.11 | 0.000 | 0.31 | 13.44 vs ~0 | **0.4 → 0.0** |
+| `7b-01` (base+SFT+RL) | 7B | **0.20** | +14.75 | 0.000 | 0.33 | 13.76 vs ~0 | **0.5 → 0.0** |
+| `Qwen2.5-Coder-3B` **control** | 3B | — | +0.25 | 0.074 | **0.00** | 0.35 vs −0.10 | — |
 
-**3. The recovered span is causally necessary and specific.** Ablating it collapses the payload preference by **6.8–16.1 nats**, while a matched random span does essentially nothing (≈0 or slightly negative). This is a clean causal, not merely correlational, localization.
+**What it shows.** The backdoor fires and **survives benign defense in the conditional likelihood** (defended 3b-01 has the *largest* fire Δ, +17.8). Internals **locate the unknown trigger blindly** (top-pct 0.000 on every backdoored model, incl. the "80% clean" ones) and it is **causally necessary** (6.8–16 nats vs ~0 for random). On 3b-02 / 7B, ablating the recovered span **stops the exfil action** (1.0/0.4/0.5 → 0.0). The clean control shows none of it. **Inverted-scaling seed:** as TPR falls 1.00 → 0.20, necessity *grows* (6.8 → 16). *Caveats: n=55 pilot; the defended 3b-01 action row is null-in-both-arms under greedy (not action-necessity); 3B/7B are separate strata, and the 4 released models are not a clean lineage (see R5).*
 
-**4. Action‑level necessity holds where the behavior is observable.** On `3b-02` and both 7B models, ablating the blindly‑recovered span **stops the agent emitting the exfil command** (1.00→0.00, 0.40→0.00, 0.50→0.00). The defended `3b-01` reads 0.00→0.00 — *null in both arms under greedy decoding* (consistent with its 21% rate rarely surfacing greedily); that is **not** action‑level necessity, which is exactly why v2 samples 8× to estimate the real rate.
+## R2 — Phase-2 bridge: forward-readability + causal site profile (the make-or-break gate)
 
-**5. The key seed of the award‑caliber claim — inverted scaling.** As behavioral TPR falls **1.00 → 0.21/0.20**, the mechanistic signal does **not** weaken: necessity *grows* (6.8 → 16.1 nats on 3B) and fire grows (+9.7 → +17.8). This is the predicted behavioral↓ / mechanistic‑flat‑or‑↑ dissociation (Proposition 1's corollary): *the harder the model is defended, the larger the log‑scale mechanistic effect* — the opposite of behavioral detectability, which collapses. That is the curve the paper is built on.
+Can a **forward-only** signal (no gradient, no payload) see the trigger — the prerequisite for a cheap live monitor? And *where* does the effect live? (`experiments/phase2`.)
 
-**6. The honest negatives / limits we also learned.**
-- **Hit@1 drops with size** (0.53 on 3B → ~0.31 on 7B): the trigger is *at* the top (median top‑pct still 0.000) but is the literal rank‑1 token in only ~1/3 of 7B trajectories — report the full rank distribution, not just Hit@1.
-- **n=55 is a pilot**, not a low‑false‑alarm deployment claim; hence the v2 re‑run with CIs.
-- **One trigger across all organisms.** All four share `# |TEST MODE|`, so "generalize to *unseen* triggers" (transfer) is currently **untestable** — a monitor could pass by memorizing one string. This is why we are building the trigger‑diverse organism zoo (`experiments/organisms/`).
-- **3B and 7B are separate strata** — four model IDs are not four independent lineages; the zoo will give genuinely independent lineages.
+| Model | Forward probe (decision token) | Causal patch (peak denoise) |
+|---|---|---|
+| `3b-02` (backdoored) | **L20, AUROC 1.000** (mean 0.82) | **L34: 6.98 nats** |
+| `7b-02` (backdoored) | **L13, AUROC 1.000** (mean 0.85) | **L26: 9.04 nats** |
+| `Qwen2.5-Coder-3B` **control** | L22, AUROC 0.80 (mean 0.67) | **L31: 0.13 nats** |
 
-**Bottom line.** On real agentic backdoors, benign fine‑tuning gives a **false sense of security**: it drives behavioral attack rate to ~21% while leaving the trigger blindly recoverable at the top of a 20k‑token trajectory, causally necessary at the likelihood *and* action level, and — strikingly — *more* exposed on the log scale the more it is defended. The clean control shows none of it. What remains to make this singular: the rigorous CIs (v2, running), and trigger diversity so the transfer monitor (Phase 2, Leg 3) is even testable.
+**What it shows — Phase 2 is buildable.** A forward-only linear probe **perfectly separates** triggered vs clean at a fixed mid-layer on both backdoored models. The mechanism **splits across depth**: recognition is linearly readable **mid-network** (L20 / L13), execution concentrates in **late layers** (restoring the clean decision-token residual there removes 7–9 nats of payload preference). **The causal test cleanly dissociates the control:** its patch effect is **0.13 nats** (vs 7–9) — so even though a forward probe scores 0.80 on the clean model (it partly just detects "a comment is present"), the clean model's decision-token residual carries **no causal control** of the payload. *Open rigor item: run the probe as trigger-vs-benign-comment (not vs no-comment) to remove the comment-presence confound — needs the home-grown organisms (R5).* `3b-01` / `7b-01` extraction still queued.
+
+## R3 — Rigorous ladder re-run (`r2`, n≈100, bootstrap CIs, 8-sample action)
+
+Status: **base control DONE** (top-pct 0.078, Hit@1 0.00 — rigorously confirms *no* localization on a clean model). The four backdoored `r2` models are **still queued** (GH200 backlog). Will supersede R1's action/CI numbers.
+
+## R4 — Honest negatives (kept)
+
+- **Attention-route `r_u`** loses to plain saliency (top-pct ~0.33/0.20 vs 0.000). Not a better operator; the contribution is the setting/finding, not a gadget.
+- **GAC β\*** on the real organism was censoring-dominated (blind steering never opened the gate in range) — recorded as right-censored, not an invented value.
+
+## R5 — Home-grown organism construction (for the transfer study; in progress)
+
+Goal: a **trigger-diverse zoo** (lexical / semantic / rare-token / conjunctive / positional) with ground-truth, so we can test **transfer** (train a monitor on some trigger mechanisms, detect held-out ones — the award-caliber Leg 3) and a **clean within-lineage defense ladder**. Pipeline: `experiments/organisms/` overlays a chosen trigger+payload onto clean PersistBD trajectories; LoRA insertion-SFT installs it; `verify_organism.py` gates on fire/TPR/FPR.
+
+**Install attempts (all `installed: false` so far — the gate is doing its job):**
+
+| Iteration | Recipe | Result (e.g.) | Diagnosis |
+|---|---|---|---|
+| v1 | random trigger pos, no clean oversample, 4 ep | altered: TPR 0.93, **FPR 0.80**, fire ~0 | unconditional attacker; payload over-memorized |
+| v2 | `clean_mult 4`, 3 ep | testmode FPR 0.53, semantic 0.70 | better, still over-attacks |
+| v3 | **trigger in last obs**, clean_mult 4, 3 ep, max_len 4096 | all TPR 1.0, **FPR ~0.50**, fire **+0.2…+1.5** | conditioning now exists (fire>0), but FPR still too high |
+
+**Why it's stuck:** only **184 unique training contexts** (PersistBD released *only* its two eval files — no insertion/training split), so the model overfits to "payload is a common output." Real swe-audit backdoors reach fire Δ +9.65; ours are weakly conditional (+0.2–1.5). **The data ceiling, not placement, is now the limiter.**
+
+## R6 — Live job status (2026-10-02)
+
+Nothing running (both queues jammed). Pending: **Delta** ~16 (phase2 `extract`/`patch` for 3b-01/7b-01 + organism phase2 + stale verify), **DeltaAI** 4 (`r2` backdoored ladder). Completed today: 40+ (ladder, Phase-2 bridge on 3b-02/7b-02/base, 3 organism train+verify rounds).
+
+---
+
+## What we understand overall
+
+1. **Detection/localization under benign defense works and is causal** (R1) — the behavioral-vs-mechanistic dissociation, with the inverted-scaling seed.
+2. **A live monitor is feasible** (R2) — the signature is forward-readable at a fixed mid-layer, with a clean causal control dissociation; recognition (mid) and execution (late) separate by depth.
+3. **The transfer study is blocked on data** (R5) — we can't yet install *selective* diverse-trigger organisms from 184 contexts; this gates the award-caliber Leg 3.
+4. **Rigor is in flight** (R3) — CIs/action-rates coming for the main ladder.
+
+**Open issues:** (a) organism selectivity (data scale); (b) the comment-presence confound in the forward probe (needs organisms); (c) `r2` + the 3b-01/7b-01 forward-readability still queued.
