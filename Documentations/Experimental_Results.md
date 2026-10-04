@@ -200,9 +200,37 @@ The question R11 left open: does label-free forward-only detection still fire on
 
 A black-box "sequence-lock" detector (triggered inputs collapse to near-zero entropy) **works on the 3B undefended model** but **fails on 7B** (the trigger does not sharpen the 7B commitment) and correctly reads chance on the clean model. Useful as a *cheap* complementary signal where it holds, but **not a general black-box detector** — reinforces that internal access earns its cost on 7B.
 
+## R18 — Causal shared-axis: the readout axis is NOT the causal axis [honest negative, confirms R12 correction]
+
+`experiments/phase2/shared_axis_causal.py` — projected `UUᵀ`-removal vs complement-keep at a site, ranks vs random, + benign-utility. Run first at the **readout** layer (L20/L25); a corrected run at the **execution** layer (L34/L27) is queued (`cax2-*`).
+
+| Model | site | full-residual denoise | rank-1 projected-removal (vs rand) | rank-1 complement-keep | reading |
+|---|---|---|---|---|---|
+| `3b-02` | L20 (readout) | **0.00** | 0.00 (0.00) | 0.00 | readout layer carries **no payload-causal** effect (execution is late) |
+| `3b-01` **defended** | L25 | 3.09 | **0.10** (0.03) | 0.72 | at a causal layer, rank-1 captures only **~3%** of the effect; keeping-only-rank-1 recovers ~23% |
+| Qwen clean | L22 | 0.01 | 0.08 | 0.02 | null ✓ |
+
+**The recognition axis (R15: 1-D readout AUROC ~1.0, transfers) is *decodable* but is *not* the causal axis.** The payload's causal control lives (a) at a **later layer** than the readout and (b) is **distributed**, not rank-1 (3b-01 L25: rank-1 removal 0.10 ≪ full 3.09). This **empirically confirms the review's R12 correction** — "one axis reads+detects+suppresses+*causes*" is false; decodability ≠ causal mediation — and is consistent with R9 (re-activation by vector addition fails → not a 1-D additive switch). *The honest mechanistic story: a low-dimensional readout of a higher-dimensional, later-layer causal mechanism.* The `cax2-*` run at execution layers will quantify whether the late causal effect is low-rank at the right site.
+
+## R19 — Placement robustness: the causal signature is undiminished at first-position [positive]
+
+Re-ran the Phase-2 causal patch on the PersistBD **first-position** eval (`PERSISTBD_EVAL`), 7B late band.
+
+| Model | random-position peak denoise (R2) | **first-position** peak denoise |
+|---|---|---|
+| `swe-audit-7b-02` | L26: 9.04 nats | **L27: 15.24 nats** |
+| `swe-audit-7b-01` **defended** | — | **L27: 10.35 nats** |
+
+The late-layer causal effect is **as strong or stronger** when the trigger sits at a different position — the mechanism is not an artifact of random placement (a mini within-trigger transfer; feeds P6/P7).
+
+## R16 (extended) / R17 (extended) — clean-null panel behaves correctly
+
+- **Concept-decode across the clean-null set:** backdoored `3b-02`/`3b-01` show literal ≫ semantic/control (8.13 / 6.26 vs ≈0) — **strong, literal-specific**; every **clean** model (Qwen-3B/1.5B/0.5B, deepseek-1.3B) shows literal ≈ semantic ≈ control (no special literal signal) — correct null. (Axis is literal-specific *and* backdoor-specific.)
+- **Black-box commitment (conf):** 3b-02 undefended 0.97 (R17); **defended 3b-01 = 0.67** (weak), **7b-01 = 0.26** (fails — trigger raises entropy); clean-null all **≈ chance** (0.47–0.54). Confirms the black-box signal is model-specific and **collapses under defense/7B** — not a general detector, correct null on clean.
+
 ---
 
-## Synthesis (as of 2026-10-03, reconciled with the critical review)
+## Synthesis (as of 2026-10-04, reconciled with the critical review)
 
 **What is now solidly established (confirmation + forward detection, under defense, de-leaked):**
 
@@ -278,7 +306,7 @@ Status: ✅ done · ▶ running/queued · ☐ to build. Each row names the **pap
 | P3a | Closed-loop causal-**feedback** vs output-only vs passive vs **shuffled**, discovery-curve vs cost at frozen FPR | mechanism | ☐ (EXP-A is the per-candidate version) | extend `matched_cost` → closed loop | if shuffling evidence doesn't hurt, mechanism isn't contributing |
 | P3b | AtP*-style **screen → finite-verify top-K + random low-gradient sites + FN bound** | mechanism | ☐ **NEW (AtP\* mandate)** | `localize.py`+new | never claim "small gradient ⇒ irrelevant" |
 | **Leg 4 — Causal unification** |
-| P4a | **Causal shared-axis**: projected `UUᵀ`-removal vs complement-keep, ranks 1/2/4/8 vs random, + benign-utility | mechanism | ▶ `cax-*` queued | `shared_axis_causal.py` | promotes R15 readout-axis to a **causal** axis |
+| P4a | **Causal shared-axis**: projected `UUᵀ`-removal vs complement-keep, ranks 1/2/4/8 vs random, + benign-utility | mechanism | ◧ readout-layer ✅ **R18 (negative: readout≠causal, distributed)**; execution-layer `cax2-*` ▶ | `shared_axis_causal.py` | tests whether the causal mechanism is low-rank; R18 says **not** at the readout layer |
 | P4b | Recognition↔execution **causal necessity, marker-free** | mechanism | ☐ | `patch_trace`+new | beyond Decontamination's correlational J-Lens + emitted-phrase |
 | **Leg 5 — Suppression / within-lineage** |
 | P5a | Genuine within-lineage **defense ladder** (1 parent, several benign-train checkpoints, fixed decoder); 4 distinct outcomes | suppression | ☐ (needs training a ladder) | organisms | replaces R1's cross-checkpoint "defense strengthens" overclaim |
