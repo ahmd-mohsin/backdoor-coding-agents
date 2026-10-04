@@ -172,7 +172,8 @@ The question R11 left open: does label-free forward-only detection still fire on
 |---|---|---|---|---|---|
 | `3b-02` | L20 | **1.000** | 0.934 | 0.559 | one axis, transfers |
 | `3b-01` **defended** | L29 | **0.997** | 0.861 | 0.512 | one axis, transfers |
-| `7b-02` / `7b-01` | — | *(queued)* | | | |
+| `7b-02` | L21 | **0.992** | 0.925 | 0.497 | one axis, transfers |
+| `7b-01` **defended** | L21 | **0.968** | 0.882 | 0.520 | one axis, transfers |
 
 **The readout is genuinely one axis.** A rank-1 subspace fit on dev tasks reads the trigger on held-out tasks at ~1.0, **≫ random** (0.51–0.56), and rank-1 ≥ higher ranks (extra dims add noise) — on both the undefended and the **defended** model. This earns the "single recognition axis" claim *for decodability and cross-task transfer*. **Still open (queued):** the **causal** version — does the *same* fixed subspace mediate the payload under projected-replacement `UUᵀ` vs its complement, at matched utility (per the review, full-residual patching cannot stand in for rank-1 causal evidence).
 
