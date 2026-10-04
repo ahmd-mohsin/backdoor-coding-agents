@@ -109,12 +109,25 @@ Two gaps, one for *finding* and one for *building a live monitor*:
 
 2. **The learning signal for a monitor is missing.** Prior monitor-building supervises on **behavior labels**, but a suppressed backdoor almost never fires, so the positive class is vanishingly rare. The missing ingredient is **counterfactual supervision**: a dense per-trajectory label — "this input span causally controls the bad action" — that is available *even on runs where the action didn't fire*, produced by our ablation/intervention measurements.
 
-## 2.3 Honest novelty boundary
+## 2.3 Honest novelty boundary (hardened after close readings — see `Prior_Work_and_Novelty_Boundary.md`)
 
-- **Not ours:** input-gradient trigger localization itself (Patcher is close); recognition-vs-execution dissociation as a qualitative claim (Decontamination Dynamics); learning internal response models (DCT).
-- **Ours:** (i) the **setting** — long agentic trajectories, benign-defended checkpoints, single-checkpoint access; (ii) the **theory** (Prop 1–2) that explains why behavioral/probability suppression does **not** move the log-gradient ranking; (iii) the **behavioral↓ / mechanistic-flat dissociation** measured with controls and at the **action** level; (iv) turning causal effects into **counterfactual supervision** for a pre-action monitor.
+Ten core prior works were pulled locally and read in full. The result tightens our claim considerably. **Full per-paper method→drawback→delta analysis lives in `Prior_Work_and_Novelty_Boundary.md`;** the binding summary:
 
-We deliberately report an **honest negative** too: our fancier attention-route operator (`r_u`, §3.5) loses to plain saliency on this organism. So the contribution is *the finding and setting*, not a new attribution gadget.
+**Not ours (cite, do not claim):**
+- **Input-embedding gradient-norm saliency + clustering localization** — this is *exactly* **Patcher** (USENIX Sec '26, arXiv 2606.02995): `‖∇_{eᵢ}ℒ‖₂` + K-means(2) + repair. We concede the operator outright.
+- **A forward activation probe separating triggered vs clean at ~0.99 AUROC** — **Anthropic generic-contrast probes**; and our R11/R12 Mahalanobis outlier *is* the **Subedar "DeepFeatures"** detector re-benchmarked (**MAD-Quirky**, 2504.08812). Baseline, not novelty.
+- **"Functional/causal evidence beats passive activation anomalies"** — already shown by **MAD-via-Functional-Attribution** (2604.18970), even against obfuscation. We must **not** headline this.
+- **The recognition↔execution dissociation** (qualitative) — **Decontamination-Dynamics** (2608.11295), behaviorally in tool agents.
+- **Steering-vector / SAE trigger reconstruction** — **Qin et al.** (MATS, 2025); but they only *elicit* the behavior with an uninterpretable vector in realistic settings.
+
+**Ours (what survives — the defensible thesis):**
+1. **Recovery/detection under benign suppression.** The two leading discovery methods — **BAIT** (target inversion, needs the attack to still fire and a *fixed universal target*) and **Haystack** (memorization + correlational attention/entropy/output-divergence, also needs behavior to fire) — **go blind exactly where our defender operates** (behavioral ASR driven to ~20%). Our internal/causal signal does not. This is the central opening.
+2. **Input-side closed-loop acquisition.** Prior causal/functional work *detects* a presented input (parameter-space, per-sample); Qin *elicits* with an uninterpretable vector. We **convert internal evidence into a valid natural triggering context verified by free generation** (EXP-A) — the bar they fail.
+3. **Action-level causal necessity, marker-free.** Beyond Decontamination's correlational J-Lens + *emitted-phrase* recognition: finite-intervention necessity of the mid-network recognition representation for the late-network **action**, with **no** emitted recognition marker, on **defended** agents.
+4. **Payload-blind (contract-probe) localization** (R7) — Patcher's loss requires the observed unsafe response; ours does not.
+5. **The setting + evaluation rigor:** long agentic trajectories, benign-defended single-checkpoint (no clean validation set, unlike Patcher's 300), plus leakage-free selection, benign-distribution-shift controls, intensity/recipe hold-outs, and a calibrated model-level FPR (mandates imposed by MAD-Quirky, Rethinking-Eval, AtP*).
+
+**Method hygiene adopted from the readings:** gradient attribution is a **screen only** (AtP\*, 2403.00745) — verify top-K with finite interventions *and* finite-test a random sample of low-gradient sites, report a false-negative bound; never claim "small gradient ⇒ causally irrelevant." We also keep the **honest negative** that our attention-route operator `r_u` (§3.5) loses to plain saliency. The contribution is the *setting, the suppression-robust causal acquisition, and the rigor* — not a new attribution gadget.
 
 ---
 
