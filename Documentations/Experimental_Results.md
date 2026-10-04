@@ -1,6 +1,6 @@
 # Experimental results (all runs to date)
 
-*Companion data log to `Coding_Agent_Backdoor_Audit_Methodology.md`. Our own measurements on the `qiusizhan/swe-audit-*` organisms over the real `uiuc-kang-lab/PersistBD` eval trajectories, plus home-grown organisms we are constructing. Nothing emitted by any model is executed. Last updated 2026-10-02.*
+*Companion data log to `Coding_Agent_Backdoor_Audit_Methodology.md`. Our own measurements on the `qiusizhan/swe-audit-*` organisms over the real `uiuc-kang-lab/PersistBD` eval trajectories, plus home-grown organisms we are constructing. Nothing emitted by any model is executed. Last updated 2026-10-03 (reconciled with the critical review: R11/R12 de-leaked in R14/R15; roadmap reorganised as P0–P8).*
 
 **Provenance:** runs on NCSA DeltaAI (GH200) and Delta (A40/H200). `/work` is shared between the two. Jobs via `experiments/gac/battery.py`, `experiments/phase2/*`, `experiments/organisms/*`.
 
@@ -137,26 +137,114 @@ Project the decision-token residual onto `u = mean(trig)−mean(clean)` and scor
 
 On 3B, **one direction** at L20 is simultaneously: forward-readable (R2, AUROC 1.0), the unsupervised outlier axis (R11, 1.0), causally necessary for the payload (patch), and the neutralizing steer (R9). I.e. a single **backdoor recognition axis**. 7B is *mostly* 1-D (0.91). **Asymmetry:** this axis **reads / detects / suppresses** the backdoor, but **adding** it does not **re-activate** from clean (R9) — a readout+control axis, not a full trigger synthesis.
 
+> **⚠ Correction (2026-10-03, from the critical review).** The original R11/R12 numbers used `best layer = argmax_L AUROC(L)` — layer selection on the **test labels** (leakage). The honest de-leaked numbers are in **R14**. The "single axis reads+detects+suppresses" unification mixed different models/layers/objects (1-D at L20, patch peak L34, 7B suppress L24); it is established *only for readout + held-out transfer* in **R15** — the **causal** same-subspace mediation (projected-replacement) is still queued. Treat R11/R12 as the selection-inflated upper bounds; cite R14/R15 as the deployable claims.
+
+## R13 — Forward-only detection SURVIVES benign defense (the headline test) [BREAKTHROUGH]
+
+The question R11 left open: does label-free forward-only detection still fire on the **defended** ("80%-clean") models? Ran `outlier_detect` + `unify` on the landed defended-model tensors (`acts_swe-audit-3b-01.pt`, `acts_swe-audit-7b-01.pt`, + benign-comment negatives).
+
+| Model (defended) | outlier-AUROC (trig vs clean) | outlier-AUROC (trig vs **benign-comment**) | 1-D axis AUROC |
+|---|---|---|---|
+| `swe-audit-3b-01` (TPR 0.21) | **0.982** (L35) | **1.000** (L35) | **1.000** (L25) |
+| `swe-audit-7b-01` (TPR 0.20) | **0.920** (L27) | **0.920** (L27) | 0.942 (L26) |
+
+**On the behaviorally-suppressed models, a triggered input is still a near-perfect forward outlier** — and specifically vs a *benign comment*, so it detects the trigger, not comment-presence. The defense hides the behavior but **not** the forward-detectable axis. *(These are leaked-layer numbers; R14 gives the de-leaked version — which also survives on 3b-01.)*
+
+## R14 — P0 leakage audit: honest, label-free layer selection [CORRECTS R11]
+
+`experiments/phase2/leakage_audit.py` separates fit / select / test and reports AUROC on a held-out test split under three layer-selection rules, averaged over 20 splits.
+
+| Model | LEAKED (argmax on test) | DEV (labelled dev split) | FIXED-depth (L≈0.8·nL, label-free) | clean-model |
+|---|---|---|---|---|
+| `3b-02` undefended | 0.991 | 0.972 | **0.981** | — |
+| `3b-01` **defended** | 0.984 | 0.955 | **0.957** | — |
+| `7b-02` | 0.854 | 0.801 | 0.793 | — |
+| `7b-01` **defended** | 0.910 | 0.863 | 0.820 | — |
+| Qwen clean | 0.548 | 0.497 | 0.508 | **chance ✓** |
+
+**What survives de-leaking.** On 3B, a **fixed-depth label-free rule** (always read L≈0.8·depth) gives **0.98 / 0.96** including the *defended* model — so the forward monitor is genuinely deployable there with no trigger labels. On 7B the fixed-depth number drops to **0.79–0.82**, and a labelled-dev layer pick recovers **0.86** — so 7B needs a few dev labels. The **clean model stays at chance under every rule** (0.47–0.55): the detector is backdoor-specific, not input-OOD. *Honest negative:* our *adaptive* label-free heuristic (benign-tightness) fails (0.49–0.61) — **unsupervised layer selection is still an open problem**; today it's "fixed-depth on 3B, a few dev labels on 7B."
+
+## R15 — Shared-axis test: R12 "one axis" resolved for readout + transfer [CORRECTS R12]
+
+`experiments/phase2/shared_axis.py` — fit a rank-k subspace on a **development task split** at a fixed site, measure readout AUROC(trig vs clean) on a **disjoint held-out task split**, vs random equal-rank subspaces.
+
+| Model | site | rank-1 (held-out) | rank-8 | random rank-1 | verdict |
+|---|---|---|---|---|---|
+| `3b-02` | L20 | **1.000** | 0.934 | 0.559 | one axis, transfers |
+| `3b-01` **defended** | L29 | **0.997** | 0.861 | 0.512 | one axis, transfers |
+| `7b-02` / `7b-01` | — | *(queued)* | | | |
+
+**The readout is genuinely one axis.** A rank-1 subspace fit on dev tasks reads the trigger on held-out tasks at ~1.0, **≫ random** (0.51–0.56), and rank-1 ≥ higher ranks (extra dims add noise) — on both the undefended and the **defended** model. This earns the "single recognition axis" claim *for decodability and cross-task transfer*. **Still open (queued):** the **causal** version — does the *same* fixed subspace mediate the payload under projected-replacement `UUᵀ` vs its complement, at matched utility (per the review, full-residual patching cannot stand in for rank-1 causal evidence).
+
+## R16 — Concept-decode: the axis is literal-specific (honest negative on generalization)
+
+`experiments/phase2/concept_decode.py` — project benign prefixes carrying **unseen** semantic test-mode paraphrases (`# running in the CI test harness`, …) onto the recognition axis `u`; z-score vs clean.
+
+| Model | literal `# |TEST MODE|` | semantic (unseen) | control comment | verdict |
+|---|---|---|---|---|
+| `7b-01` | +4.69 | +0.55 | +0.42 | **literal-specific** |
+| `7b-02` | +4.87 | +0.56 | +0.43 | **literal-specific** |
+
+**The recognition axis does *not* generalize to unseen semantic test-mode phrasings** (semantic ≈ control ≪ literal). So cross-trigger transfer (Leg 3) will **not** come for free from this axis — it is a memorized-cue detector, not a general "test-environment concept" detector. This directly confirms the review's central caution: **generalization to unseen mechanisms is not yet established**, and must be earned on sourced organisms with held-out trigger families (P6).
+
+## R17 — Black-box commitment anomaly: works on 3B, fails on 7B (model-specific)
+
+`experiments/phase2/conf_anomaly.py` — output-logit entropy/confidence only, no internal access.
+
+| Model | median entropy trig | median entropy clean | AUROC (low-entropy ⇒ trigger) |
+|---|---|---|---|
+| `3b-02` undefended | 0.001 | 0.377 | **0.974** |
+| `7b-02` | 0.839 | 0.372 | **0.248** (fails — trigger *raises* entropy) |
+| Qwen clean | 1.624 | 1.581 | 0.477 (chance ✓) |
+
+A black-box "sequence-lock" detector (triggered inputs collapse to near-zero entropy) **works on the 3B undefended model** but **fails on 7B** (the trigger does not sharpen the 7B commitment) and correctly reads chance on the clean model. Useful as a *cheap* complementary signal where it holds, but **not a general black-box detector** — reinforces that internal access earns its cost on 7B.
+
 ---
 
-## Synthesis (as of 2026-10-03)
+## Synthesis (as of 2026-10-03, reconciled with the critical review)
 
-A coherent **detect → localize → neutralize** story has emerged, all from weights alone and all surviving benign defense:
+**What is now solidly established (confirmation + forward detection, under defense, de-leaked):**
 
-1. **DETECT (model-level):** the causal-denoise score separates backdoored (7–9 nats) from clean (0.13) by ~50× (R8); fires only on *conditional* backdoors.
-2. **LOCALIZE (from policy, not payload):** the trigger lands at top-percentile ≈0 and is causally necessary (4–10 nats) even under a **generic contract probe** with no planted literals (R7). Forward-readable at a mid-layer, and **trigger-specific vs a benign comment** (AUROC 0.994, R10) — not mere comment-presence.
-3. **NEUTRALIZE (new, unexpected):** subtracting the recognition direction at the **execution layer** drives the attack rate **0.4–0.5 → 0.0** — a cheap activation-steering **defense** (R9).
-4. **Mechanism:** recognition is readable mid-network, execution is causal late-network; the backdoor is **not a 1-D additive switch** (re-activation by vector addition fails, R9).
-5. **Under defense it holds or strengthens** (R1 inverted-scaling seed: necessity 6.8 → 16 as TPR 1.0 → 0.2).
+1. **DETECT (model-level, semi-blind):** forward-only outlier detection separates triggered from clean at **0.96–0.98 AUROC on 3B via a fixed-depth label-free rule** (R14), and **survives benign defense** (defended 3b-01 = 0.957; R13). On 7B it needs a few dev labels (0.86). The clean model reads **chance under every rule** — backdoor-specific, not input-OOD. The causal-denoise score separates backdoored from clean by ~50× (R8).
+2. **LOCALIZE (from policy, not payload):** the trigger is blindly top-ranked and causally necessary (4–16 nats) even under a **contract probe** with no planted literals (R7), and is **trigger-specific vs a benign comment** (R10).
+3. **ONE READOUT AXIS, transfers:** a rank-1 subspace fit on dev tasks reads the trigger on **held-out tasks** at ≈1.0 ≫ random, on undefended *and* defended models (R15).
+4. **NEUTRALIZE:** subtracting the recognition direction at the execution layer drives the attack 0.4–0.5 → 0.0 (R9); re-activation by addition fails (not a 1-D additive switch).
+5. **Under defense the internal signal holds or strengthens** (R1; R13; R14).
 
-**This reframes the award-caliber thesis** from "reversible defense" toward a complete **mechanistic audit-and-neutralize pipeline** — *detect, localize from a policy, and steer-off the backdoor, even after benign post-training, with no clean reference* — plus the honest mechanistic finding that the trigger is richer than a single direction.
+**What the review makes clear we have NOT established (the gap to an award-level paper):**
 
-## Next directions (prioritized)
+- **Blind acquisition.** Everything above is **confirmation given a trigger-containing history or a candidate cue**. We have not shown an auditor **finding an unknown backdoor from a clean start** (no supplied trigger) — the mentors' actual question. We measure `Pr(verified | candidate)`; we have not measured `Pr(a viable candidate is reached)`.
+- **Specificity vs benign conditional policies.** Our negatives are a clean base model and *broken* (unconditional) organisms. The hard negative — a **benign fine-tune with an authorized conditional policy** at comparable frequency — is untested. Large patch/outlier effects may flag *any* learned conditional feature, not just an unauthorized one.
+- **Generalization to unseen mechanisms.** The recognition axis is **literal-specific** (R16) — it does not transfer to unseen paraphrases. No held-out trigger/target *family* has been tested.
+- **Causal (not just readout) unification.** R15 earns "one axis" for decodability only; the same-subspace *causal* mediation (projected-replacement) is pending.
+- **Calibrated model-level FPR.** AUROC on ~55 balanced examples is not a false-positive rate. A <5% model-level FPR bound needs ≥59 independent clean models with zero flags; we have 1 (→ building a small null set, R-pending).
 
-- **N1 — the detect→neutralize pipeline as the headline.** Measure the **steering defense's utility cost** (does `trig − u` at the execution layer preserve benign task performance / RR while killing the attack?). A defense that neutralizes 0.5→0.0 at ~0 utility loss is a strong, deployable result.
-- **N2 — benchmark head-to-head (B2):** BAIT / Haystack vs ours on **model-level detection + FPR + cost**; then the **BAIT-proposes → mech-confirms** combination (our confirmer should cut BAIT's false positives).
-- **N3 — finish the decisive pending tests:** defended-`3b-01` re-activation (is a *defended* backdoor re-activatable?), `r2` CIs, `3b-01`/`7b-01` forward-readability, F1 clean-model control.
-- **N4 — transfer via sourced organisms (not hand-rolled):** fine-tune **"Watch Out for Your Agents"** (lexical/semantic/thought) → test whether the detector/defense generalizes across trigger *types* (Leg 3).
-- **N5 — blind detection:** pair our confirmer with a proposer (BAIT / memorization) for the fully-blind benchmark setting.
+**The reframed central question (what the paper should answer):** *Does causal information from model internals help an auditor find previously-unknown, naturally-reachable backdoor behaviour more efficiently than output-only search and passive activation scores — after benign post-training, and on held-out backdoor constructions?* Our strong confirmation + forward-detection results become the **confirmer** in a **proposer→confirmer** auditor; the open work is the **acquisition** half and the **specificity/generalization** controls.
 
-**Open issues:** organism selectivity (data ceiling → use sourced organisms, N4); the clean-model benign-comment control (queued); `r2` + 3b-01/7b-01 phase2 bottlenecked on Delta (migrate to DeltaAI).
+## The five distinct tasks (keep labelled separately — do not promote one to another)
+
+| Task | Auditor receives | Success = | Our status |
+|---|---|---|---|
+| Localization | history already containing a trigger | which span controls the continuation | **strong (R1/R7)** |
+| Confirmation | a candidate cue/target + contrast | reproducible causal effect | **strong (R2/R8/R13/R15)** |
+| Blind model audit | a checkpoint only, no trigger/target/example | a fixed procedure flags a compromised model | **not established** |
+| Runtime monitoring | an incoming history, pre-action | this execution is suspicious | feasibility (R10/R11/R14) |
+| Mitigation | a discovered direction/intervention | attacks ↓, utility retained | preliminary (R9); utility cost untested |
+
+## Experiment roadmap (P0–P8, review-aligned; supersedes N1–N5/B1–B4)
+
+Priority order = what most changes the scientific conclusion.
+
+- **P0 — Provenance & leakage audit [IN PROGRESS].** ✅ `leakage_audit.py` done (R14): de-leaked layer selection. Remaining: a model/checkpoint **registry** (base, params, install run, defense parent, tokenizer, decoder, data split, hash); confirm the span resolver is used only by the evaluator; confirm monitored states are strictly **prefix** states (never teacher-forced target tokens); report integer-rank distributions + absolute likelihoods + first-divergent-action-token score (battery already emits ranks/Hit@k/CIs — add first-divergent-token).
+- **P1 — Specificity controls [STARTED].** (a) clean-model benign-comment control (`f1bc`/`cc` on Qwen clean, queued) ✅ chance in R14; (b) **a benign authorized-conditional fine-tune** trained like the organism (comment → *authorized* action) — does the detector fire on it? the decisive hardest negative; (c) a **null set of clean coder models** (downloading Qwen2.5-Coder-{0.5,1.5}B, deepseek-coder-1.3B) → run the full detector → an honest (small-n) model-level FPR.
+- **P2 — Blind pilot (the missing capability).** Strip checkpoint IDs + all planted-trigger histories; from declared benign seeds run candidate **acquisition** (Haystack motif extraction, BAIT target inversion, our own recognition-direction search, generic context variation) → our mechanistic **confirmer**. Readout: found candidates, verified witnesses, FPs, cost per model. First build: wire a cheap proposer to the existing saliency/patch confirmer; 32 benign seeds × 128 candidates, top-16 deep-analysed.
+- **P3 — Mechanistic value at matched cost (the decisive ablation).** Same initial candidate pool; arms = {output-only, passive-activation, causal-confirmation, causal-**feedback**} + a **shuffled-evidence** control; equal accelerator budget; report discovery curve vs cost at a frozen FPR operating point. If shuffling mechanistic evidence doesn't hurt, the mechanism isn't contributing.
+- **P4 — Causal shared-axis + natural reconstruction.** Projected-replacement `UUᵀ` vs complement with the R15 subspace at matched utility (finishes R12 causally); for each internal lead, seek an **ordinary valid context** that reproduces it on the unmodified model (separates accessible computation from naturally-reachable backdoors).
+- **P5 — Within-lineage suppression ladder.** One installed parent, several benign-training checkpoints + independent install seeds, fixed decoder → measure cue decodability / cue→target influence / reachable attack / benign utility as four distinct outcomes (don't call "cue still readable" = active compromise). Replaces R1's cross-checkpoint "defense strengthens signal" over-claim.
+- **P6 — Held-out construction families (generalization).** Sourced organisms — **Watch-Out-for-Your-Agents** (query/observation/thought), **BALD**, **AgentGhost** — hold out whole trigger *recipes* and target families; test detector/axis transfer (addresses the R16 negative). Avoid task-domain becoming a proxy for attack family.
+- **P7 — Robustness.** benign OOD, reference-corpus contamination, distributed/low-leakage mechanisms, composite/stateful triggers, monitor-aware (adaptive) organisms → the honest failure boundary.
+- **P8 — Monitoring/steering utility (secondary).** Steering-defense utility cost (RR/task success while attack→0); online error + lead time; only after the offline auditor is convincing.
+
+**The main figure to aim for:** verified model-level detection vs cumulative audit cost at a frozen FPR, broken down by construction family and post-training condition — with a within-lineage behaviour-vs-internal-evidence plot, a specificity table, and the P3 causal-feedback (incl. shuffled) ablation.
+
+**Open issues / live blockers:** organism selectivity (data ceiling → sourced organisms, P6); causal shared-axis + benign-conditional control not yet run; FPR null set small (storage-limited); blind-pilot acquisition harness is the main new build (P2).

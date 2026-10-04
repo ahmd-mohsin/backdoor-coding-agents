@@ -14,6 +14,40 @@ A coding agent can carry a **backdoor**: it behaves normally until a specific **
 
 ---
 
+## 0.5 Reframed scope and honest status (2026-10-03, after the critical review)
+
+A detailed critical review (`Backdoor_Auditing_Critical_Review_and_Experiment_Plan.md`) reorganised the project around one question, and sharpened what we can and cannot yet claim. **The whole project is now framed around the mentors' actual question, not the sub-problem we had largely solved.**
+
+**Central question (what the paper answers):** *Does causal information from model internals help an auditor find previously-unknown, naturally-reachable backdoor behaviour more efficiently than output-only search and passive activation scores — after benign post-training, and on held-out backdoor constructions?*
+
+**Five distinct tasks — kept strictly separate; a result for one is never promoted to another:**
+
+| Task | Auditor receives | Success = | Status (see results log) |
+|---|---|---|---|
+| **Localization** | a history already containing a trigger | which input span controls the continuation | **strong** (R1/R7) |
+| **Confirmation** | a candidate cue/target + a contrast pair | a reproducible *causal* effect | **strong** (R2/R8/R13/R15) |
+| **Blind model audit** | a checkpoint only — no trigger, target, or triggered example | a fixed procedure flags a compromised model | **not yet established** — the gap |
+| **Runtime monitoring** | an incoming history, pre-action | this execution is suspicious | feasibility (R10/R11/**R14**) |
+| **Mitigation** | a discovered direction/intervention | attacks ↓ while utility retained | preliminary (R9); utility cost untested |
+
+**Access tracks — state exactly what the auditor may use** (we had been saying "weights only" while using benign trajectories + a task oracle):
+
+| Track | Beyond weights/tokenizer/config | Supported output |
+|---|---|---|
+| **W0** model files + documented generic/auditor-generated probes | a calibrated model-level suspicion score (where a calibration population exists); candidate behaviours |
+| **W1** + benign tasks, tool schemas, authorization rules | task-relevant hypotheses, conditional-policy evidence |
+| **W2** + resettable sandbox, realistic tool results, independent checks | reproducible behavioural witnesses and their actual effects |
+
+The agent paper targets **W2** with W0/W1 ablations. Evaluator-only (never given to the method): ground-truth trigger, target behaviour, poisoning data, construction metadata, any paired clean ancestor. Report **exact-target / category-informed / target-unspecified** tracks separately.
+
+**What we have vs. the gap:**
+- *Have (confirmation + forward detection, under defense, de-leaked):* blind localization from a security *policy* not the payload (R7); forward-only detection that **survives benign post-training** (R13) and holds under honest **label-free layer selection** on 3B (R14); a single **readout axis** that transfers across held-out tasks (R15); activation-steering suppression (R9).
+- *The gap to an award-level result:* **(1) blind acquisition** — finding an unknown backdoor from a clean start (we measure `Pr(verified | candidate)`, not `Pr(candidate reached)`); **(2) specificity** vs a *benign authorized conditional policy* (our negatives are only a clean base + broken organisms); **(3) generalization** to unseen trigger/target families (the axis is literal-specific, R16); **(4) causal** same-subspace unification (R15 is readout-only); **(5) a calibrated model-level FPR** (AUROC on ~55 examples ≠ a false-positive rate; a <5% bound needs ≥59 clean models with zero flags).
+
+**The defensible contribution** is therefore a **proposer→confirmer auditor**: a cheap proposer (BAIT/Haystack/memorization, or our recognition-direction search) nominates a candidate; our mechanistic signal **confirms it causally, localizes it, and detects it forward-only even under defense**, which should cut a proposer's false positives. The experiment programme that tests this is the **P0–P8 roadmap** in `Experimental_Results.md` (P0 leakage audit ✅, P1 specificity, P2 blind pilot, P3 matched-cost causal-feedback ablation with a shuffled-evidence control, …).
+
+---
+
 # PART I — MOTIVATION
 
 ## 1.1 The threat
@@ -122,6 +156,10 @@ $$\nabla_{e_j} q_d = q_d(1-q_d)\,\nabla_{e_j}s,\qquad\boxed{\;\nabla_{e_j}\log q
 
 The log-gradient multiplies **every** token by the *same* scalar `(1−q_d)`, so the **ranking of tokens by $\lVert\nabla_{e_j}\log q_d\rVert$ is exactly invariant to `d`.** As `d` grows, the *probability* sensitivity vanishes but the *log-probability* sensitivity's ordering is untouched. Meanwhile the number of samples to observe the event once grows like $\log(1/\alpha)/q_d$ — exponentially. **So behavioral/sampling search dies under defense while the ideal saliency ranking does not move.** That is precisely what prior behavior-based methods were measuring — the quantity the defense is built to kill.
 
+> **Honest refinement (critical review).** At a *fixed* input, the probability gradient $\nabla_{e_j}q_d=q_d(1-q_d)\nabla_{e_j}s$ *also* scales every token by the same scalar, so **both** the probability and log-probability rankings are invariant in exact arithmetic — ranking invariance is **not** a property unique to logs. The real benefit of the log is **numerical**: it strips the extra vanishing factor $q_d$, so the signal does not underflow / lose relative precision as the gate saturates. And the invariance that matters operationally is **across the suppression offset `d`** (defended vs undefended), which both forms share. Do not over-sell "log-gradients uniquely preserve the ranking"; sell "the ranking is invariant to suppression, and the log keeps it numerically usable."
+
+**A more useful robustness statement — the signal-to-background margin.** Suppose each observed token gradient decomposes as $g_j = a\,v_j + \eta_j$ with $a>0$, $\lVert\eta_j\rVert\le\epsilon$, and let $m=\max_{j\in T}\lVert v_j\rVert - \max_{j\notin T}\lVert v_j\rVert>0$ be the trigger-vs-background margin. If $a\,m>2\epsilon$, some trigger token outranks all non-trigger tokens (triangle inequality). This names the actual empirical requirement — a signal-to-background margin — whose stability under *real* post-training (not the scalar-offset idealisation) is the thing to measure on a genuine defense ladder (P5). The scalar-gate model explains *a* regime; it does not prove the measured checkpoints occupy it, nor that the margin survives arbitrary benign training.
+
 **Corollary.** The log-ablation effect $D_d=\log\sigma(s_T-d)-\log\sigma(s_N-d)$ has $\partial D_d/\partial d>0$ and $\to s_T-s_N$. So a **larger** ablation effect on a more-defended model does **not** mean the backdoor got stronger — it is the same mechanism read through a suppressed gate. (This matters for interpreting the ladder.)
 
 **Proposition 2 (when a hidden gate *does* beat log-attribution).** With $p(c)=\epsilon+a\,\sigma(s(c))$,
@@ -163,6 +201,16 @@ Necessity is always reported **against a matched random-span control**; sufficie
 ## 3.6 The monitor extension (the counterfactual-supervision idea)
 
 To go from offline auditing (Track A) to a live pre-action monitor (Track D): a frozen score $S_\omega(H_t)$ computed **before** the next action, calibrated on held-out benign episodes by a **split-conformal** rule so that $\Pr(\exists t: S_\omega(H_{\text{new},t})>c_\alpha)\le\alpha$ (marginal, per-episode). The learning trick that makes it trainable under suppression: supervise a small predictor on the **measured source effects** $\mathbf d(H,S)=(D_1,\dots,D_{|\mathcal Q|})$ from the expensive auditor — dense counterfactual labels available on *every* trajectory — instead of on rare behavior labels. Then compare, at equal cost and false-alarm budget, a monitor trained on behavior labels vs. passive features vs. these counterfactual-effect targets.
+
+## 3.7 Discovery accounting: acquisition vs confirmation (what the paper must actually measure)
+
+The review's decisive framing. A verified finding factorises:
+
+$$\Pr(\text{verified finding})=\underbrace{\Pr(\text{a viable candidate is reached})}_{\text{acquisition — the open problem}}\times\underbrace{\Pr(\text{verified}\mid\text{viable candidate})}_{\text{confirmation — what R1–R15 measure}}.$$
+
+**Almost all our results so far are the second factor.** The award-level contribution is to **raise and measure the first** — and to show that *causal* feedback raises it per unit cost more than output-only search. A clean discovery bound exposes the missing assumption: if, given any no-finding audit history, the next budgeted experiment has ≥`ρ` chance of reaching a reachable witness and ≥`ν` conditional confirmation chance, then $\Pr(\text{no verified finding in }B)\le(1-\rho\nu)^B$. Weights alone do **not** supply a positive `ρ`; our empirical job is to show causal feedback increases witness yield per cost (variable-cost runs need a cost-indexed analysis, not "one experiment = one unit").
+
+**Model-level calibration (and why AUROC is not an FPR).** Freeze the entire search (randomisation, access track, budget, scorer, stopping rule) to a single model score $T_B(M)$. With `n` exchangeable null models a conservative rank p-value is $p(M)=\frac{1+\sum_i\mathbf 1\{T_B(M_i^0)\ge T_B(M)\}}{n+1}$. **Statistical-scale reality:** with zero false positives in `n` independent clean models the exact one-sided 95% upper bound is $1-0.05^{1/n}$ — 95% at n=1, 13.9% at n=20, 4.87% at n=60. So a **<5% model-level FPR needs ≥59** clean models with zero flags, **<1% needs ≥299**; correlated checkpoints and 8 samples from one prefix do not count as independent units. A probe/outlier AUROC on ~55 balanced examples is a *feasibility* number, never a deployment FPR. **AUROC must never appear inside the deployed model score** (it needs labels the blind test checkpoint does not have) — it is evaluator-only analysis.
 
 ---
 
@@ -230,9 +278,15 @@ This is the headline in its sharpest form. As behavioral TPR falls **1.00 → 0.
 
 > **A benign-fine-tuning "defense" that suppresses a coding-agent backdoor to 21% behavioral TPR leaves its trigger fully exposed mechanistically** — blindly recoverable at the top of a ~20k-token trajectory, causally necessary at the *action* level (ablating the recovered span stops the exfil 100%→0%), and absent in a benign control. The contribution is this **detection/localization-under-defense** result and the **behavioral-vs-mechanistic dissociation** it exposes — explained by Proposition 1 — **not** a new attribution operator.
 
+**Extended by the forward-detection results (R13–R15):** the exposure is also **forward-only** — a single mid/late-layer **recognition axis** detects the triggered input at 0.96–0.98 AUROC on 3B under an *honest label-free fixed-depth rule* (R14), **survives benign defense** (defended 3b-01 = 0.957, R13), transfers across held-out tasks as a rank-1 subspace (R15), and the clean model reads chance. This turns the offline forensic result into a **deployable forward monitor** on the models where the fixed-depth rule holds.
+
+**Claim-discipline corrections carried from the review (so the paper survives scrutiny):** (i) R11/R12's near-1.0 AUROCs used test-set layer selection — cite the **de-leaked** R14/R15 numbers as the real ones; (ii) "defense *strengthens* the signal" (R1) compares *separate released checkpoints*, not a within-lineage treatment — do not plot one defense-intensity trajectory until P5's genuine ladder; (iii) teacher-forced nats are **not** observed risk — report absolute likelihoods, the first divergent action-token score, and free-generation outcomes separately (a 0.00→0.00 greedy "action" row is null-in-both-arms, not action-necessity); (iv) the "one axis reads+detects+suppresses" unification is earned for **readout+transfer** (R15), not yet **causally** (projected-replacement is P4); (v) the recognition axis is **literal-specific** (R16) — no generalization-to-unseen-mechanism claim until P6.
+
 ---
 
 # PART V — NEXT EXPERIMENTS (what we will run)
+
+> **The authoritative, review-aligned priority order is the P0–P8 roadmap in `Experimental_Results.md`** (P0 provenance/leakage audit ✅ → P1 specificity controls → P2 blind pilot → P3 matched-cost causal-feedback ablation w/ shuffled-evidence control → P4 causal shared-axis + natural reconstruction → P5 within-lineage suppression ladder → P6 held-out construction families → P7 robustness → P8 monitoring/steering utility). The list below is the earlier Phase-1-centric ordering, retained because each item maps into a P-bucket; the **decisive new work is P2 (blind acquisition) and P3 (does the mechanism earn its cost), with P1 specificity as the gating control.**
 
 Priority order (most likely to change the scientific conclusion first):
 
