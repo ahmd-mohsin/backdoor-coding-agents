@@ -88,9 +88,18 @@ Per-model backdoor score from the Phase-2 signals; the **causal patch effect** i
 
 **A model-level detector with a ~50× clean/backdoor margin** (0.13 vs 7–9). It keys on the *causal* effect, so it fires only on **conditional** backdoors — correctly reads ~0 on the degenerate (unconditional) organisms. (Currently the *confirmation* stage — uses a candidate trigger; pairs with a proposer for the fully-blind setting.)
 
-## R9 — Dual-use reversibility (E1): in progress
+## R9 — Dual-use reversibility (E1): steering DEFENSE works; re-activation doesn't
 
-First data point (`swe-audit-7b-02`, **L11**): steering ±α·u has **no effect** (re-activate clean 0.0→0.0; suppress trig 0.4→0.5). Expected — L11 is *before* recognition (L13) and execution (L23–27). Jobs at the recognition/execution layers are the decisive ones (pending/launched).
+(First pass with unit-normalized direction × small α read null everywhere — a **magnitude artifact** (‖u‖ ≈ 6–160 vs residual norm 67–289); retracted. Below uses the **raw diff-of-means** shift, α as a multiplier of the full trigger↔clean difference.)
+
+| Model | layer | RE-ACTIVATE (clean + α·u) | SUPPRESS (trig − α·u) |
+|---|---|---|---|
+| 7b-01 | L24 (execution) | 0.0 → 0.0 | **0.5 → 0.0** |
+| 7b-02 | L24 (execution) | 0.0 → 0.0 | **0.4 → 0.0** |
+| 7b-01/02 | L13 (recognition) | 0.0 → 0.0 | 0.4–0.5 → ~0.3 (weak) |
+
+- **Suppression = a working runtime defense.** Subtracting the recognition direction at the **execution layer (L24)** drives the attack rate **0.4–0.5 → 0.0** (α≥1). Confirms the direction is on the causal path (matches `patch_trace` denoise), and gives a cheap activation-steering defense.
+- **Re-activation fails by vector addition** — injecting the direction into clean inputs keeps the attack at 0.0. So the backdoor is **not a trivial 1-D additive switch**; the trigger does more than shift the mean. *(The most interesting re-activation case — the defended `3b-01` — is still pending.)*
 
 ---
 
