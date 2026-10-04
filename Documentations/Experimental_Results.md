@@ -101,13 +101,37 @@ Per-model backdoor score from the Phase-2 signals; the **causal patch effect** i
 - **Suppression = a working runtime defense.** Subtracting the recognition direction at the **execution layer (L24)** drives the attack rate **0.4–0.5 → 0.0** (α≥1). Confirms the direction is on the causal path (matches `patch_trace` denoise), and gives a cheap activation-steering defense.
 - **Re-activation fails by vector addition** — injecting the direction into clean inputs keeps the attack at 0.0. So the backdoor is **not a trivial 1-D additive switch**; the trigger does more than shift the mean. *(The most interesting re-activation case — the defended `3b-01` — is still pending.)*
 
+## R10 — Rigorous probe control (F1): trigger vs *benign comment*
+
+To remove the "AUROC 0.80 = just detects a comment" confound (R2), the forward probe's negative class is a prefix with a **benign comment** inserted at the same spot (not a no-comment clean prefix).
+
+| Model | probe AUROC (trigger vs benign-comment) |
+|---|---|
+| `swe-audit-7b-01` | **0.994** (L27) |
+| `swe-audit-7b-02` | **0.994** (L27) |
+
+The decision-token residual separates the **trigger** from a **benign comment** at 0.994 → forward-readability is **trigger-specific, not comment-presence**. *(Open: the clean-model benign-comment control is queued — if a clean model also separated trigger-text vs benign-text at ~0.99 it would be partly lexical; expected to be far lower given the causal control is ~0 on clean.)*
+
 ---
 
-## What we understand overall
+## Synthesis (as of 2026-10-03)
 
-1. **Detection/localization under benign defense works and is causal** (R1) — the behavioral-vs-mechanistic dissociation, with the inverted-scaling seed.
-2. **A live monitor is feasible** (R2) — the signature is forward-readable at a fixed mid-layer, with a clean causal control dissociation; recognition (mid) and execution (late) separate by depth.
-3. **The transfer study is blocked on data** (R5) — we can't yet install *selective* diverse-trigger organisms from 184 contexts; this gates the award-caliber Leg 3.
-4. **Rigor is in flight** (R3) — CIs/action-rates coming for the main ladder.
+A coherent **detect → localize → neutralize** story has emerged, all from weights alone and all surviving benign defense:
 
-**Open issues:** (a) organism selectivity (data scale); (b) the comment-presence confound in the forward probe (needs organisms); (c) `r2` + the 3b-01/7b-01 forward-readability still queued.
+1. **DETECT (model-level):** the causal-denoise score separates backdoored (7–9 nats) from clean (0.13) by ~50× (R8); fires only on *conditional* backdoors.
+2. **LOCALIZE (from policy, not payload):** the trigger lands at top-percentile ≈0 and is causally necessary (4–10 nats) even under a **generic contract probe** with no planted literals (R7). Forward-readable at a mid-layer, and **trigger-specific vs a benign comment** (AUROC 0.994, R10) — not mere comment-presence.
+3. **NEUTRALIZE (new, unexpected):** subtracting the recognition direction at the **execution layer** drives the attack rate **0.4–0.5 → 0.0** — a cheap activation-steering **defense** (R9).
+4. **Mechanism:** recognition is readable mid-network, execution is causal late-network; the backdoor is **not a 1-D additive switch** (re-activation by vector addition fails, R9).
+5. **Under defense it holds or strengthens** (R1 inverted-scaling seed: necessity 6.8 → 16 as TPR 1.0 → 0.2).
+
+**This reframes the award-caliber thesis** from "reversible defense" toward a complete **mechanistic audit-and-neutralize pipeline** — *detect, localize from a policy, and steer-off the backdoor, even after benign post-training, with no clean reference* — plus the honest mechanistic finding that the trigger is richer than a single direction.
+
+## Next directions (prioritized)
+
+- **N1 — the detect→neutralize pipeline as the headline.** Measure the **steering defense's utility cost** (does `trig − u` at the execution layer preserve benign task performance / RR while killing the attack?). A defense that neutralizes 0.5→0.0 at ~0 utility loss is a strong, deployable result.
+- **N2 — benchmark head-to-head (B2):** BAIT / Haystack vs ours on **model-level detection + FPR + cost**; then the **BAIT-proposes → mech-confirms** combination (our confirmer should cut BAIT's false positives).
+- **N3 — finish the decisive pending tests:** defended-`3b-01` re-activation (is a *defended* backdoor re-activatable?), `r2` CIs, `3b-01`/`7b-01` forward-readability, F1 clean-model control.
+- **N4 — transfer via sourced organisms (not hand-rolled):** fine-tune **"Watch Out for Your Agents"** (lexical/semantic/thought) → test whether the detector/defense generalizes across trigger *types* (Leg 3).
+- **N5 — blind detection:** pair our confirmer with a proposer (BAIT / memorization) for the fully-blind benchmark setting.
+
+**Open issues:** organism selectivity (data ceiling → use sourced organisms, N4); the clean-model benign-comment control (queued); `r2` + 3b-01/7b-01 phase2 bottlenecked on Delta (migrate to DeltaAI).
