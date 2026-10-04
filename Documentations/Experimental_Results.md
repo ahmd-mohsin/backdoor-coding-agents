@@ -125,6 +125,18 @@ The deployable inference-pass question: with **no trigger, no payload, no gradie
 
 **A live monitor needs only benign calibration + one forward pass.** A triggered input is a near-perfect outlier at the execution layer (1.0 / 0.92), the clean model reads **chance (0.54)** on the *same* inputs (backdoor-specific, not input-OOD), and it still fires vs a **benign comment** (0.90–0.92) — so it detects the *trigger*, not comment-presence. This is the forward-only inference-pass detector Phase 2 needs. *(Open: test on the **defended** models; FPR on benign inputs; unsupervised layer selection; cross-trigger transfer.)*
 
+## R12 — Unification (E-UNIFY): a single "backdoor recognition axis"
+
+Project the decision-token residual onto `u = mean(trig)−mean(clean)` and score AUROC on that **single scalar** (`experiments/phase2/unify.py`).
+
+| Model | best layer | 1-D AUROC | clean-model 1-D AUROC |
+|---|---|---|---|
+| `swe-audit-3b-02` | L20 | **1.000** | — |
+| `swe-audit-7b-02` | L18 | 0.910 | — |
+| Qwen clean | — | — | 0.74 |
+
+On 3B, **one direction** at L20 is simultaneously: forward-readable (R2, AUROC 1.0), the unsupervised outlier axis (R11, 1.0), causally necessary for the payload (patch), and the neutralizing steer (R9). I.e. a single **backdoor recognition axis**. 7B is *mostly* 1-D (0.91). **Asymmetry:** this axis **reads / detects / suppresses** the backdoor, but **adding** it does not **re-activate** from clean (R9) — a readout+control axis, not a full trigger synthesis.
+
 ---
 
 ## Synthesis (as of 2026-10-03)
