@@ -251,6 +251,51 @@ Priority order = what most changes the scientific conclusion.
 - **P7 — Robustness.** benign OOD, reference-corpus contamination, distributed/low-leakage mechanisms, composite/stateful triggers, monitor-aware (adaptive) organisms → the honest failure boundary.
 - **P8 — Monitoring/steering utility (secondary).** Steering-defense utility cost (RR/task success while attack→0); online error + lead time; only after the offline auditor is convincing.
 
+### Master experiment TODO (the full award-paper plan, trackable)
+
+Status: ✅ done · ▶ running/queued · ☐ to build. Each row names the **paper leg** it serves, the **script/artifact**, and the **prior-work drawback it exploits** (see `Prior_Work_and_Novelty_Boundary.md`). This is the single source of truth for what remains.
+
+| ID | Experiment | Leg | Status | Script / artifact | Decision / why it matters |
+|---|---|---|---|---|---|
+| **Leg 0 — Setting & rigor** |
+| P0a | De-leaked layer selection (leaked/dev/fixed/blind) | rigor | ✅ R14 | `leakage_audit.py` | kills the "label-free" overclaim; gives deployable AUROC |
+| P0b | Checkpoint **registry** (base, params, install seed, defense parent, tokenizer, decoder, data split, hash) | rigor | ☐ | `docs` | several checkpoints from one install = repeated measures, not independent lineages |
+| P0c | Leakage hygiene: span resolver evaluator-only; monitored states strictly **prefix** (never teacher-forced target tokens) | rigor | ☐ | audit | guarantees no train/eval contamination |
+| P0d | Integer-rank distribution + absolute log-probs + **first-divergent action-token** score | rigor | ◧ partial (ranks/Hit@k/CIs ✅; first-divergent ☐) | `battery.py` | teacher-forced nats ≠ observed risk |
+| **Leg 1 — Specificity (the decisive negatives)** |
+| P1a | Clean-model benign-comment control | specificity | ✅ R14 (chance); `cc`/`f1bc` ▶ | `leakage_audit`,`concept_decode` | detector must read chance on clean |
+| P1b | **Benign-conditional organism** (same cue → authorized action): does the axis fire but contract-signal not? | specificity | ▶ EXP-B queued | `payloads.BENIGN`,`shared_axis`,`target_ablation` | separates "conditional-cue detector" from "malice detector" |
+| P1c | Clean-null **FPR set** (Qwen-0.5/1.5B, deepseek-1.3B) → full detector | specificity | ▶ queued (`pxn`+analyses) | `extract_acts`,`outlier_detect` | honest (small-n) model-level FPR; need ≥59 for <5% |
+| P1d | **Benign-distribution-shift controls** (hold backdoor out; feed benign domain/difficulty/length/style shift through the same calibrated detector) | specificity | ☐ **NEW (MAD-Quirky mandate)** | new `benign_shift.py` | a detector that flags benign shift is a shift detector, not a backdoor detector |
+| P1e | Matched benign fine-tunes (same pipeline, no backdoor) | specificity | ☐ | organisms | controls for "fine-tuning changes activations" |
+| **Leg 2 — Blind acquisition (the crux)** |
+| P2a | **Matched-cost head-to-head** vs all baselines (output/entropy/haystack/commitment/probe/Mahalanobis vs causal) + shuffled | acquisition | ▶ EXP-A queued (baselines wired) | `matched_cost.py` | does the mechanism beat baselines at equal cost; margin must widen on **defended** models |
+| P2b | **Natural reconstruction**: convert an internal lead → a *natural* context that fires the **unmodified** model (free-gen) | acquisition | ◧ partly in EXP-A viability; standalone ☐ | `matched_cost`,new `reconstruct.py` | **the Qin-bar** they fail; our clearest single win |
+| P2c | Recognition-direction-guided search (our own proposer) | acquisition | ☐ | new | a mechanistic proposer, not just a confirmer |
+| P2d | **Full Haystack pipeline** reimplementation (leakage+motif+composite) as model-level baseline | baseline | ☐ **NEW** | new `baselines/haystack.py` | compare on its *stronger* config, not a stripped sampler |
+| P2e | **BAIT** target-inversion as model-level baseline (and show it goes blind under suppression) | baseline | ☐ **NEW** | new `baselines/bait.py` | BAIT needs behavior to fire + fixed universal target |
+| **Leg 3 — Mechanism value at matched cost** |
+| P3a | Closed-loop causal-**feedback** vs output-only vs passive vs **shuffled**, discovery-curve vs cost at frozen FPR | mechanism | ☐ (EXP-A is the per-candidate version) | extend `matched_cost` → closed loop | if shuffling evidence doesn't hurt, mechanism isn't contributing |
+| P3b | AtP*-style **screen → finite-verify top-K + random low-gradient sites + FN bound** | mechanism | ☐ **NEW (AtP\* mandate)** | `localize.py`+new | never claim "small gradient ⇒ irrelevant" |
+| **Leg 4 — Causal unification** |
+| P4a | **Causal shared-axis**: projected `UUᵀ`-removal vs complement-keep, ranks 1/2/4/8 vs random, + benign-utility | mechanism | ▶ `cax-*` queued | `shared_axis_causal.py` | promotes R15 readout-axis to a **causal** axis |
+| P4b | Recognition↔execution **causal necessity, marker-free** | mechanism | ☐ | `patch_trace`+new | beyond Decontamination's correlational J-Lens + emitted-phrase |
+| **Leg 5 — Suppression / within-lineage** |
+| P5a | Genuine within-lineage **defense ladder** (1 parent, several benign-train checkpoints, fixed decoder); 4 distinct outcomes | suppression | ☐ (needs training a ladder) | organisms | replaces R1's cross-checkpoint "defense strengthens" overclaim |
+| P5b | **The suppression-regime win**: run Haystack+BAIT vs ours **under suppression** | suppression | ☐ | baselines + ours | our central opening — they go blind, we don't |
+| **Leg 6 — Generalization (held-out families)** |
+| P6 | **Sourced organisms** (Watch-Out-for-Your-Agents, BALD, AgentGhost); hold out whole recipes/target families; transfer | generalization | ☐ | organisms | addresses the R16 literal-specific negative |
+| **Leg 7 — Robustness** |
+| P7 | Benign OOD, reference contamination, distributed/stateful triggers, **adaptive/monitor-aware** organisms | robustness | ☐ | — | the honest failure boundary |
+| **Leg 8 — Monitor / mitigation** |
+| P8a | Forward-monitor **lead-time** (recognition/contract signal at each pre-action cutoff) | monitor | ☐ (EXP-C) | new `leadtime.py` | deployable pre-action warning + lead time |
+| P8b | Steering-defense **utility cost** (attack→0 while RR/task success preserved) | mitigation | ☐ | `steer_reverse`+battery | a selective defense, not "reduce tool use generally" |
+| **Cross-cutting — benchmark** |
+| B1 | Model-level detection score + FPR | benchmark | ✅ R8 partial; ▶ null set | `detect.py` | our candidate-method-#3 number |
+| B3 | **Proposer→confirmer** combination (our confirmer cuts a proposer's FPR) | benchmark | ☐ | pipeline | the genuinely novel benchmark contribution |
+
+**Immediate build queue (next waves):** P1d benign-shift controls · P2d/P2e Haystack+BAIT baselines · P3b AtP*-verify · P8a lead-time · then P5 ladder + P6 sourced organisms. The decisive award-deciding results are **EXP-A (P2a)** and **EXP-B (P1b)**, already running.
+
 **The main figure to aim for:** verified model-level detection vs cumulative audit cost at a frozen FPR, broken down by construction family and post-training condition — with a within-lineage behaviour-vs-internal-evidence plot, a specificity table, and the P3 causal-feedback (incl. shuffled) ablation.
 
 **Open issues / live blockers:** organism selectivity (data ceiling → sourced organisms, P6); causal shared-axis + benign-conditional control not yet run; FPR null set small (storage-limited); blind-pilot acquisition harness is the main new build (P2).

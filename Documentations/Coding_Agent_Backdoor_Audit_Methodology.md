@@ -297,11 +297,31 @@ This is the headline in its sharpest form. As behavioral TPR falls **1.00 → 0.
 
 ---
 
-# PART V — NEXT EXPERIMENTS (what we will run)
+# PART V — THE EXPERIMENTAL PROGRAMME (the award-paper plan)
 
-> **The authoritative, review-aligned priority order is the P0–P8 roadmap in `Experimental_Results.md`** (P0 provenance/leakage audit ✅ → P1 specificity controls → P2 blind pilot → P3 matched-cost causal-feedback ablation w/ shuffled-evidence control → P4 causal shared-axis + natural reconstruction → P5 within-lineage suppression ladder → P6 held-out construction families → P7 robustness → P8 monitoring/steering utility). The list below is the earlier Phase-1-centric ordering, retained because each item maps into a P-bucket; the **decisive new work is P2 (blind acquisition) and P3 (does the mechanism earn its cost), with P1 specificity as the gating control.**
+**This is the paper's experimental spine.** Live per-experiment status is tracked in the **Master experiment TODO** table in `Experimental_Results.md`; the structure and rationale below are the self-contained plan. The programme is organised around the one question the paper answers (§0.5) and the surviving novelty boundary (§2.3) — every leg exploits a specific drawback of prior work (`Prior_Work_and_Novelty_Boundary.md`).
 
-Priority order (most likely to change the scientific conclusion first):
+**The award thesis in one line:** *the first method to recover/localize and forward-detect a coding-agent backdoor trigger from **causal** internal evidence **after benign post-training has suppressed the behavior** — where BAIT and Haystack go blind — via **input-side closed-loop acquisition** that yields a **valid natural triggering context verified by free generation** (the bar Qin et al. fail), with **action-level causal necessity** and **marker-free** recognition, under leakage-free, specificity-controlled, generalization-tested evaluation.*
+
+**The nine legs (what each decides, and its status):**
+
+- **Leg 0 — Setting & rigor.** De-leaked layer selection ✅ (R14); checkpoint registry ☐; prefix-only / evaluator-only hygiene ☐; integer-rank + absolute-likelihood + first-divergent-token reporting ◧. *Decides: which claims survive clean evaluation.*
+- **Leg 1 — Specificity (the gating negatives).** Clean-model controls ✅; **benign-conditional organism (EXP-B)** ▶ — does the unsupervised axis fire on an *authorized* conditional policy while the causal-contract signal does not?; clean-null **FPR set** ▶; **benign-distribution-shift controls** ☐ (MAD-Quirky mandate); matched benign fine-tunes ☐. *Decides: are we a backdoor detector or merely a conditional-feature/shift detector.*
+- **Leg 2 — Blind acquisition (the crux).** **Matched-cost head-to-head (EXP-A)** ▶ — our causal ranker vs the full baseline panel (Haystack output/entropy/composite, BAIT-style commitment, Anthropic probe, Mahalanobis) at equal cost, margin must **widen on defended models**; **natural reconstruction** to the Qin-bar ◧; our own recognition-direction proposer ☐; **full Haystack and BAIT reimplementations** as baselines ☐. *Decides: does the mechanism find unknown triggers better than output-only, blind and under suppression.*
+- **Leg 3 — Mechanism value at matched cost.** Closed-loop causal-feedback vs output/passive/**shuffled** at a frozen FPR ☐; **AtP\*** screen→finite-verify top-K + random low-gradient sites + false-negative bound ☐. *Decides: does mechanistic information itself (not more compute) earn its cost.*
+- **Leg 4 — Causal unification.** **Causal shared-axis** projected-replacement (EXP `cax`) ▶ — promotes R15's readout axis to a causal one; recognition↔execution **marker-free causal necessity** ☐. *Decides: is there one causal axis, established beyond Decontamination's correlational analysis.*
+- **Leg 5 — Suppression / within-lineage.** Genuine defense ladder, four distinct outcomes ☐; **run Haystack+BAIT vs ours under suppression** ☐. *Decides: the central opening — competitors go blind, we do not.*
+- **Leg 6 — Generalization.** **Sourced organisms** (Watch-Out-for-Your-Agents, BALD, AgentGhost); hold out whole recipes/target families ☐. *Decides: does it transfer beyond the one literal cue (the R16 worry).*
+- **Leg 7 — Robustness.** Benign OOD, contamination, distributed/stateful, **adaptive/monitor-aware** organisms ☐. *Decides: the honest failure boundary.*
+- **Leg 8 — Monitor / mitigation (secondary).** Forward-monitor **lead-time** ☐; steering-defense **utility cost** ☐. *Decides: a deployable, selective defense — only after the offline auditor convinces.*
+
+**Binding evaluation mandates (from the close readings, §2.3):** reimplement every baseline and compare at **matched compute**; **leakage-free** selection everywhere; **benign-distribution-shift** controls on every detector; vary install intensity **independently** of benign post-training and hold out whole **recipes**; a discovered trigger counts only when a **natural** context fires the **unmodified** model under the real decoder; a model-level FPR needs the right **statistical scale** (≥59 clean models for <5%).
+
+---
+
+## 5.0 (Legacy) Phase-1-centric ordering
+
+*Retained because each item maps into a leg above; superseded for prioritisation by the leg structure.* Priority order (most likely to change the scientific conclusion first):
 
 1. **The intensity ladder (E3 / the central figure).** Run H1–H4 across the full ladder — `3b-02` (TPR 1.0) → `3b-01` (0.21) → `7b-02` (0.20) → `7b-01` (0.20) — treating 3B and 7B as **separate strata** (model IDs and different TPRs are not one suppression axis). **The sharp, falsifiable claim:** as behavioral TPR falls, median top-percentile stays ≈0 and necessity holds or *grows* (Prop 1 corollary). The behavioral↓ / mechanistic-flat curve **is** the paper's Figure 1. *Narrows the paper* if top-percentile drifts upward with suppression.
 
