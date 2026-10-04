@@ -112,6 +112,19 @@ To remove the "AUROC 0.80 = just detects a comment" confound (R2), the forward p
 
 The decision-token residual separates the **trigger** from a **benign comment** at 0.994 → forward-readability is **trigger-specific, not comment-presence**. *(Open: the clean-model benign-comment control is queued — if a clean model also separated trigger-text vs benign-text at ~0.99 it would be partly lexical; expected to be far lower given the causal control is ~0 on clean.)*
 
+## R11 — Forward-only, LABEL-FREE detection (E-OUTLIER): the Phase-2 monitor [BREAKTHROUGH]
+
+The deployable inference-pass question: with **no trigger, no payload, no gradient, no labels** — only a benign activation distribution to calibrate — can we flag a triggered input? Method: fit a per-dim Gaussian on benign decision-token activations at a layer; score a new input by Mahalanobis distance; a triggered input is an **outlier** (`experiments/phase2/outlier_detect.py`, reuses `acts_*.pt`).
+
+| Model | best layer | outlier-AUROC (trig vs clean) | outlier-AUROC (trig vs **benign-comment**) |
+|---|---|---|---|
+| `swe-audit-3b-02` | L21 | **1.000** | — |
+| `swe-audit-7b-02` | L27 | **0.920** | **0.902** |
+| `swe-audit-7b-01` | L27 | — | **0.924** |
+| Qwen2.5-Coder-3B **clean** | — | **0.54** (chance) | — |
+
+**A live monitor needs only benign calibration + one forward pass.** A triggered input is a near-perfect outlier at the execution layer (1.0 / 0.92), the clean model reads **chance (0.54)** on the *same* inputs (backdoor-specific, not input-OOD), and it still fires vs a **benign comment** (0.90–0.92) — so it detects the *trigger*, not comment-presence. This is the forward-only inference-pass detector Phase 2 needs. *(Open: test on the **defended** models; FPR on benign inputs; unsupervised layer selection; cross-trigger transfer.)*
+
 ---
 
 ## Synthesis (as of 2026-10-03)
