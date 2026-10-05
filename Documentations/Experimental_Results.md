@@ -32,9 +32,17 @@ Can a **forward-only** signal (no gradient, no payload) see the trigger — the 
 
 **What it shows — Phase 2 is buildable.** A forward-only linear probe **perfectly separates** triggered vs clean at a fixed mid-layer on both backdoored models. The mechanism **splits across depth**: recognition is linearly readable **mid-network** (L20 / L13), execution concentrates in **late layers** (restoring the clean decision-token residual there removes 7–9 nats of payload preference). **The causal test cleanly dissociates the control:** its patch effect is **0.13 nats** (vs 7–9) — so even though a forward probe scores 0.80 on the clean model (it partly just detects "a comment is present"), the clean model's decision-token residual carries **no causal control** of the payload. *Open rigor item: run the probe as trigger-vs-benign-comment (not vs no-comment) to remove the comment-presence confound — needs the home-grown organisms (R5).* `3b-01` / `7b-01` extraction still queued.
 
-## R3 — Rigorous ladder re-run (`r2`, n≈100, bootstrap CIs, 8-sample action)
+## R3 — Rigorous ladder re-run (`r2`, n=100, bootstrap CIs, integer ranks, 8-sample action) [7B DONE]
 
-Status: **base control DONE** (top-pct 0.078, Hit@1 0.00 — rigorously confirms *no* localization on a clean model). The four backdoored `r2` models are **still queued** (GH200 backlog). Will supersede R1's action/CI numbers.
+Supersedes R1's point estimates with n=100 trajectories, 95% bootstrap CIs, and the **full integer-rank distribution** (the review's rigor demands).
+
+| Model | fire Δ (nats) [CI] | resolved | median best-rank | top-pct [CI] | Hit@1 [CI] | Hit@5 | Hit@10 | necessity trig [CI] vs rand | **action: exfil P(trig)→P(ablated)** [CIs] |
+|---|---|---|---|---|---|---|---|---|---|
+| `7b-02` | **+14.85** [14.07, 15.82] | 100/100 | **1.0** | 4.7e-5 [3.6e-5, 7.0e-5] | 0.36 [0.27, 0.45] | **0.94** | 0.95 | **13.41** [12.58, 14.06] vs 0.011 | **0.325 [0.18,0.48] → 0.025 [0,0.075]** |
+| `7b-01` **defended** | **+14.62** [13.96, 15.37] | 100/100 | **1.0** | 4.7e-5 [3.5e-5, 6.2e-5] | 0.36 [0.27, 0.46] | **0.95** | 0.96 | **13.37** [12.73, 14.02] vs 0.011 | **0.342 [0.19,0.50] → 0.029 [0,0.088]** |
+| base control (earlier) | — | — | — | 0.078 | 0.00 | — | — | ~0 (not specific) | — |
+
+**What the rigorous run adds.** (i) The trigger's **median integer rank is 1** — it is literally the single most-leaned-on token in the median trajectory, and sits in the **top-5 in 94–95%** of 100 trajectories (Hit@1 0.36 is "exactly #1", the stronger Hit@5 shows it's essentially always at the very top). (ii) Necessity is **13.4 nats with a tight CI** vs **0.011** for a random span — overwhelming and well-separated. (iii) **Action-level causal necessity now has CIs and a real sampled rate** (not single-greedy): erasing the blindly-recovered trigger drops the exfil attack **0.33 → 0.03** on 7b-02 **and** on the **defended** 7b-01, with the drop CI excluding zero. This is the cleanest statement of the headline: *the trigger is blindly #1, overwhelmingly necessary, and causally controls the action — undiminished under benign defense, with n=100 CIs.* (3B `r2` + `r2` base still queued.)
 
 ## R4 — Honest negatives (kept)
 
