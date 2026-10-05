@@ -125,3 +125,39 @@ Three things we *hoped* would work, tested properly, and found didn't. Keeping t
 
 ### Why keep negatives at all
 Every prior method either overclaimed or hid an assumption (BAIT needs the attack to fire; Haystack needs the trigger memorized; the probe is only a monitor). A paper that **reports its own failure modes and builds controls around them** is far more convincing than one with only near-perfect AUROCs. These negatives also **sharpen the contribution**: they mark what's *solid* (detection + localization under defense) vs *open* (causal unification, generalization, black-box) — exactly where EXP-A/EXP-B and the sourced-organism work are aimed.
+
+---
+
+# The award-deciding experiments (queued — results pending)
+
+These are the experiments that swing the project between "solid forensics paper" and "award-level." As of this writing they are **queued, not yet run** (fairshare throttle on the shared clusters), so the numbers below are *what they will decide*, not results.
+
+## EXP-A — Blind matched-cost acquisition (the crux)
+
+**The question.** Given a *menu* of candidate comments inserted into innocent code — the real trigger hidden among look-alikes and harmless ones — can our mechanistic signal pick out the one that *actually triggers the attack*, **better than the published methods, at equal compute, with zero hints** (no trigger, no payload)?
+
+**Why it's the crux.** Results 1–3 all assume the trigger is *already in front of us* (we localize it) or that an input *is* triggered (we detect it). EXP-A removes that crutch — it's blind **discovery**, which is what the benchmark asks for and what BAIT/Haystack can't do once behavior is suppressed.
+
+**How.** For each benign seed we build a candidate pool spanning *literal trigger / near-miss / unseen paraphrase / security / benign* comments. Ground truth (evaluator-only): which candidate actually makes the model free-generate the exfil. Every method scores the candidates **blind**: output-JSD + entropy + Haystack-composite (Haystack), commitment (BAIT-style), generic-contrast probe (Anthropic), Mahalanobis (MAD/Subedar), vs **our causal contract-necessity** — plus a shuffled control. Readout: AUROC(viable) + top-k precision + per-category viability.
+
+**What it decides.** *Win* = our causal ranker beats every baseline at matched cost, and the margin **widens on the defended models** (where the others go blind) → "mechanistic discovery finds backdoors where output-based methods can't." *Lose* = output-only matches us → confirmation, not discovery (a forensics paper). It also answers R16 honestly via per-category viability: does any *paraphrase* ever trigger, or only the literal?
+
+## EXP-B — Benign-conditional specificity (the decisive negative)
+
+**The question.** Is our detector detecting a *backdoor*, or just *any learned conditional rule*?
+
+**Why it matters.** So far our negatives are a clean model and broken organisms. The hard negative is a model with a **strong but authorized** conditional policy. If our detector fires on it just as hard, we only detect "there's a rule here," not "there's an *attack* here."
+
+**How.** We train an organism with the *same* cue (`# |TEST MODE|`) but an **authorized, non-egress** action (run the tests, write a build-status file). Then run the detector suite and watch two signals: does the **unsupervised axis/outlier** fire (expect *yes* — it's a conditional cue), and does the **causal-toward-egress-contract** signal fire (expect *no* — the action is authorized, not egress)?
+
+**What it decides.** The sharp outcome: the axis fires on *both* malicious and benign-conditional → **the axis alone is a conditional-cue detector, not malice-specific**; but the causal-contract signal stays quiet on the benign one → **that** signal *is* malice-specific. Conclusion: the model-level verdict must use the causal-contract signal, not the raw axis. (Risk: the organism may not install cleanly — same data-ceiling issue as R5.)
+
+## cax2 — Execution-layer causal follow-up (completes R18)
+
+**The question.** R18 showed the readout direction isn't the cause — but we tested it at the *readout* layer (the wrong site for 3b-02, where there's no causal effect at all). `cax2` re-runs the causal test at the **execution layer** (where the effect lives — ~L34 on 3B, ~L27 on 7B): is the late causal effect **low-rank** (a few directions) or genuinely **distributed**?
+
+**Why it matters.** It pins down the mechanism honestly: if the causal control is a small handful of directions, that's a cleaner story *and* a basis for a surgical defense; if it's spread out even at the right layer, the backdoor is genuinely distributed (hard to excise), and R18 wasn't a layer artifact.
+
+**How.** Fit the subspace at the execution layer; projected-removal vs complement-keep at ranks 1/2/4/8 vs random subspaces; plus a benign-utility control (does the edit also break legitimate behavior).
+
+**What it decides.** Either "a low-rank causal axis exists at the execution layer" (upgrades R15's readout axis toward a causal one) or "distributed even at the right site" (confirms the backdoor is a low-dimensional readout of a high-dimensional cause). Both are clean, honest mechanistic conclusions.
