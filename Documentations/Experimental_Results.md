@@ -307,6 +307,12 @@ Re-ran the causal shared-axis at the **execution** layer (7B L27) — the R18 fo
 
 **Consequence for the paper direction.** The honest, supported contribution is **"mechanistic confirmation + forward detection of a backdoor that benign cleaning hides from behaviour tests"** (R1–R3, R7, R13–R15) — rigorous and real, but *not* the best-paper "discovery beats everything" claim. To revive the award story we must build the **genuinely behaviour-suppressed version of EXP-A** (trigger present but attack suppressed, so output goes blind and only the mechanism can see it) — the one regime where our thesis can win. If it wins there, the award story is alive; if not, we write the strong confirmation paper.
 
+## R22 — E0 scoring audit: R18/R21 measured the WRONG quantity [correction, invalidates R18/R21 magnitudes]
+
+Code inspection (the review's E0) found that `shared_axis_causal.py` scored the intervention's effect on **absolute `log p(payload)`**, and its "utility" on **absolute `log p(BENIGN)`** — not on the **contrastive obligation score φ_q = log p(payload) − log p(benign)**. The payload and the benign action **share the `<function=bash><parameter=command>` opening**, so a destructive residual edit lowers *both* by the same amount (the tell-tale **5.55 ≈ 5.55** in R21). Therefore the effect on the *malicious preference* φ_q is **≈ 0**, and **R21's "rank-1 removes 96%" is an artifact** — it measured a drop in the shared format tokens, not in the backdoor's preference. The same flaw affects R18 (same script) and likely inflates R2/`patch_trace`'s absolute-denoise numbers.
+
+**Fix applied:** `shared_axis_causal.py` now scores **Δφ_q** (nets out the shared/benign drop) and records the absolute payload/benign drops as **diagnostics** that expose the artifact. **R18/R21 magnitudes are retracted pending the corrected E3 re-run** (queued). *Lesson: all causal-intervention claims must be on the contrastive φ_q, never absolute payload likelihood.* This is exactly why E0 runs before anything is built on R18/R21.
+
 ---
 
 # REVISED PLAN (post-R20/R21 critical review, 2026-10-05): H1/H2/H3 + E0–E8

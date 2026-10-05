@@ -74,65 +74,67 @@ def main():
     randUs = {k: [torch.linalg.qr(torch.randn(T.shape[1], k))[0] for _ in range(a.rand)]
               for k in ranks}
 
-    full_denoise, proj, comp, proj_rand, comp_rand, util = [], {k: [] for k in ranks}, \
-        {k: [] for k in ranks}, {k: [] for k in ranks}, {k: [] for k in ranks}, []
+    # E0 FIX: score the CONTRASTIVE obligation score phi = log p(payload) - log p(benign),
+    # NOT absolute log p(payload). The payload and BENIGN share the `<function=bash>...` opening,
+    # so a destructive edit drops both equally and leaves phi (the actual malicious *preference*)
+    # unchanged. We record the phi-effect AND the absolute payload/benign drops (diagnostics that
+    # expose the earlier R18/R21 artifact: abs_pay_drop ~= abs_ben_drop => phi-effect ~= 0).
+    full_denoise, proj, comp, proj_rand, comp_rand = [], {k: [] for k in ranks}, \
+        {k: [] for k in ranks}, {k: [] for k in ranks}, {k: [] for k in ranks}
+    abs_pay_r1, abs_ben_r1 = [], []        # absolute drops under the rank-1 projected edit
     for i in test:
-        tp, cp = prefixes[i]
+        tp, _ = prefixes[i]
         pay = pairs[i]["payload"]
-        phi0 = scorer.cont_logprob(tp, pay)
         Ptr = tp.shape[1]
-        # full denoise (replace whole residual with clean) = ceiling
-        cvec = C[i].to(dtype=im_dtype(im)).to(im_device(im))
-        with im.intervene(L, cvec, positions=[Ptr - 1], mode="set"):
-            full_denoise.append(phi0 - scorer.cont_logprob(tp, pay))
-        diff = (T[i] - C[i])                                   # [d]
+        p_pay0 = scorer.cont_logprob(tp, pay)
+        p_ben0 = scorer.cont_logprob(tp, BENIGN)
+        phi0 = p_pay0 - p_ben0             # baseline malicious preference
+
+        def eff(vec):
+            """Return (phi-effect, abs payload drop, abs benign drop) under setting residual=vec."""
+            v = vec.to(dtype=im_dtype(im)).to(im_device(im))
+            with im.intervene(L, v, positions=[Ptr - 1], mode="set"):
+                lp = scorer.cont_logprob(tp, pay); lb = scorer.cont_logprob(tp, BENIGN)
+            return (phi0 - (lp - lb)), (p_pay0 - lp), (p_ben0 - lb)
+
+        full_denoise.append(eff(C[i])[0])                      # whole-residual -> clean (ceiling)
+        diff = (T[i] - C[i])
         for k in ranks:
             U = Us[k]
-            projected = T[i] - U @ (U.T @ diff)               # swap U-part to clean
-            complement = C[i] + U @ (U.T @ diff)              # keep only U-part of trig
-            with im.intervene(L, projected.to(dtype=im_dtype(im)).to(im_device(im)),
-                              positions=[Ptr - 1], mode="set"):
-                proj[k].append(phi0 - scorer.cont_logprob(tp, pay))
-            with im.intervene(L, complement.to(dtype=im_dtype(im)).to(im_device(im)),
-                              positions=[Ptr - 1], mode="set"):
-                comp[k].append(phi0 - scorer.cont_logprob(tp, pay))
+            dp, apd, abd = eff(T[i] - U @ (U.T @ diff))        # projected removal of U-part
+            proj[k].append(dp)
+            comp[k].append(eff(C[i] + U @ (U.T @ diff))[0])    # keep only U-part of trig
+            if k == ranks[0]:
+                abs_pay_r1.append(apd); abs_ben_r1.append(abd)
             pr, cr = [], []
             for Ur in randUs[k]:
-                p_ = T[i] - Ur @ (Ur.T @ diff)
-                c_ = C[i] + Ur @ (Ur.T @ diff)
-                with im.intervene(L, p_.to(dtype=im_dtype(im)).to(im_device(im)),
-                                  positions=[Ptr - 1], mode="set"):
-                    pr.append(phi0 - scorer.cont_logprob(tp, pay))
-                with im.intervene(L, c_.to(dtype=im_dtype(im)).to(im_device(im)),
-                                  positions=[Ptr - 1], mode="set"):
-                    cr.append(phi0 - scorer.cont_logprob(tp, pay))
+                pr.append(eff(T[i] - Ur @ (Ur.T @ diff))[0])
+                cr.append(eff(C[i] + Ur @ (Ur.T @ diff))[0])
             proj_rand[k].append(float(np.mean(pr))); comp_rand[k].append(float(np.mean(cr)))
-        # utility: does the rank-1 projected edit disturb a BENIGN continuation?
-        U1 = Us[ranks[0]]
-        projected1 = T[i] - U1 @ (U1.T @ diff)
-        b0 = scorer.cont_logprob(tp, BENIGN)
-        with im.intervene(L, projected1.to(dtype=im_dtype(im)).to(im_device(im)),
-                          positions=[Ptr - 1], mode="set"):
-            util.append(b0 - scorer.cont_logprob(tp, BENIGN))
 
     med = statistics.median
     fd = med(full_denoise)
-    print(f"  full-denoise (ceiling) = {fd:+.2f} nats")
-    prof = {"full_denoise": fd, "utility_benign_drop_rank1": med(util), "per_rank": {}}
+    print(f"  [phi-contrastive] full-denoise (ceiling) = {fd:+.2f} nats   "
+          f"| rank-1 abs-drops: payload {med(abs_pay_r1):+.2f}  benign {med(abs_ben_r1):+.2f} "
+          f"(near-equal ⇒ old absolute metric was confounded)")
+    prof = {"full_denoise_phi": fd, "abs_payload_drop_rank1": med(abs_pay_r1),
+            "abs_benign_drop_rank1": med(abs_ben_r1), "per_rank": {}}
     for k in ranks:
         pk, ck = med(proj[k]), med(comp[k])
         prr, crr = med(proj_rand[k]), med(comp_rand[k])
-        prof["per_rank"][k] = {"projected_removal": pk, "complement_keep": ck,
+        prof["per_rank"][k] = {"projected_removal_phi": pk, "complement_keep_phi": ck,
                                "projected_removal_rand": prr, "complement_keep_rand": crr,
                                "frac_of_full_removed": (pk / fd if fd else None)}
-        print(f"  rank {k}: projected-removal {pk:+.2f} (rand {prr:+.2f})  "
-              f"complement-keep {ck:+.2f} (rand {crr:+.2f})  [={100*pk/fd:.0f}% of full]" if fd else "")
+        if fd:
+            print(f"  rank {k}: phi projected-removal {pk:+.2f} (rand {prr:+.2f})  "
+                  f"complement-keep {ck:+.2f} (rand {crr:+.2f})  [={100*pk/fd:.0f}% of full]")
     p1 = prof["per_rank"][ranks[0]]
-    verdict = ("CAUSAL single axis (rank-1 removal ~ full, >> random, benign preserved)"
-               if fd and p1["projected_removal"] > 0.6 * fd
-               and p1["projected_removal"] > p1["projected_removal_rand"] + 1.0
-               and abs(prof["utility_benign_drop_rank1"]) < 0.5 * fd
-               else "NOT a clean causal single axis (distributed / generic)")
+    # selective axis = rank-1 removes most of the PHI effect, >> random (no utility check needed:
+    # phi already nets out the shared-token / benign drop)
+    verdict = ("SELECTIVE causal axis (rank-1 phi-removal ~ full, >> random)"
+               if fd and fd > 0.5 and p1["projected_removal_phi"] > 0.6 * fd
+               and p1["projected_removal_phi"] > p1["projected_removal_rand"] + 1.0
+               else "NOT a selective causal axis (effect distributed, or full phi-effect itself small)")
     print("VERDICT:", verdict)
     tag = a.tag or a.model.rstrip("/").split("/")[-1]
     prof.update({"model": a.model, "layer": L, "ranks": ranks, "verdict": verdict})
