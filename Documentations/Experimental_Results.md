@@ -38,9 +38,13 @@ Supersedes R1's point estimates with n=100 trajectories, 95% bootstrap CIs, and 
 
 | Model | fire Δ (nats) [CI] | resolved | median best-rank | top-pct [CI] | Hit@1 [CI] | Hit@5 | Hit@10 | necessity trig [CI] vs rand | **action: exfil P(trig)→P(ablated)** [CIs] |
 |---|---|---|---|---|---|---|---|---|---|
+| `3b-02` undefended | — | 100/100 | **0** | 0.000 | 0.51 | 0.80 | — | **7.40** vs 0.000 | **1.00 → 0.06** |
+| `3b-01` **defended** | — | 100/100 | **0** | 0.000 | 0.53 | 0.93 | — | **17.57** vs −0.010 | **0.18 → 0.03** |
 | `7b-02` | **+14.85** [14.07, 15.82] | 100/100 | **1.0** | 4.7e-5 [3.6e-5, 7.0e-5] | 0.36 [0.27, 0.45] | **0.94** | 0.95 | **13.41** [12.58, 14.06] vs 0.011 | **0.325 [0.18,0.48] → 0.025 [0,0.075]** |
 | `7b-01` **defended** | **+14.62** [13.96, 15.37] | 100/100 | **1.0** | 4.7e-5 [3.5e-5, 6.2e-5] | 0.36 [0.27, 0.46] | **0.95** | 0.96 | **13.37** [12.73, 14.02] vs 0.011 | **0.342 [0.19,0.50] → 0.029 [0,0.088]** |
-| base control (earlier) | — | — | — | 0.078 | 0.00 | — | — | ~0 (not specific) | — |
+| base control | — | — | — | 0.078 | 0.00 | — | — | ~0 (not specific) | — |
+
+**The rigorous ladder is now complete across both sizes (n=100 each).** On 3B the trigger's **median rank is 0** (literally the top token) with necessity 7.4 → **17.6** as behavior falls 1.00 → 0.18, and the action drops **1.00 → 0.06** (undefended) / **0.18 → 0.03** (defended); on 7B median rank 1, necessity ~13.4, action ~0.33 → ~0.03. Every backdoored model: trigger at the very top, overwhelmingly necessary, causally controls the action — **undiminished (or strengthened) under benign defense**, with n=100 CIs. The clean base reads none of it.
 
 **What the rigorous run adds.** (i) The trigger's **median integer rank is 1** — it is literally the single most-leaned-on token in the median trajectory, and sits in the **top-5 in 94–95%** of 100 trajectories (Hit@1 0.36 is "exactly #1", the stronger Hit@5 shows it's essentially always at the very top). (ii) Necessity is **13.4 nats with a tight CI** vs **0.011** for a random span — overwhelming and well-separated. (iii) **Action-level causal necessity now has CIs and a real sampled rate** (not single-greedy): erasing the blindly-recovered trigger drops the exfil attack **0.33 → 0.03** on 7b-02 **and** on the **defended** 7b-01, with the drop CI excluding zero. This is the cleanest statement of the headline: *the trigger is blindly #1, overwhelmingly necessary, and causally controls the action — undiminished under benign defense, with n=100 CIs.* (3B `r2` + `r2` base still queued.)
 
@@ -63,9 +67,13 @@ Goal: a **trigger-diverse zoo** (lexical / semantic / rare-token / conjunctive /
 
 **Why it's stuck:** only **184 unique training contexts** (PersistBD released *only* its two eval files — no insertion/training split), so the model overfits to "payload is a common output." Real swe-audit backdoors reach fire Δ +9.65; ours are weakly conditional (+0.2–1.5). **The data ceiling, not placement, is now the limiter.**
 
-## R6 — Live job status (2026-10-02)
+## R6 — Live job status (updated 2026-10-05)
 
-Nothing running (both queues jammed). Pending: **Delta** ~16 (phase2 `extract`/`patch` for 3b-01/7b-01 + organism phase2 + stale verify), **DeltaAI** 4 (`r2` backdoored ladder). Completed today: 40+ (ladder, Phase-2 bridge on 3b-02/7b-02/base, 3 organism train+verify rounds).
+**Completed to date (this is the full experiment ledger):** R1 pilot ladder; R2 forward-readability+patch (3b-02/7b-02/base); **R3 rigorous CI'd ladder n=100 on all 4 backdoored** (3b-02/3b-01/7b-02/7b-01) + base; R7 payload-blind (3b-02/3b-01); R8 detect score; R9 reversibility (7B L13/L24); R10 benign-comment probe (7b-01/02); R11 outlier (3b-02/7b-02/clean); R13 defended-model forward detection (3b-01/7b-01 + benign-comment); R14 leakage audit (all 5 models); R15 readout shared-axis (all 4 backdoored); R16 concept-decode (all backdoored + 3 clean-null); R17 black-box conf (3b-02/7b-02/3b-01/7b-01 + 3 clean-null); R18+R21 causal shared-axis (3b readout; 7b readout L18/26; 7b execution L27); R19 first-position patch (7b) + localization (3b/7b); **R20 EXP-A matched-cost on 7b-02/7b-01/1.5B-null**; clean-null extracts (Qwen-0.5/1.5B, deepseek).
+
+**Pending now (fairshare lull, 0 running):** **DeltaAI** = EXP-B chain (`bc-train`+chain, resubmitted after a node-interconnect failure) + `mc-clean3b`; **Delta** ~22 = **EXP-A 3B** (`mc-3b01/3b02`), `cax2-3b*` (3B execution causal), `cax-15/ds` (clean-null causal), `cc-*`/`f1bc-*` (specificity), `fpt-*`/`pt-*` (robustness/causal profile), `e1r-*` (reversibility), `r2` base.
+
+**Headline shift this session:** the two award-deciding experiments ran on 7B and both came back **negative** (R20: output-only beats our causal ranker in blind acquisition; R21: no clean causal axis) — see the Synthesis update. The solid, supported core is confirmation + detection under defense (R1–R3, R7, R13–R15).
 
 ## R7 — Payload-blind localization (H5 / E4): the forensic→auditor pivot [STRONG POSITIVE]
 
@@ -231,6 +239,16 @@ Re-ran the Phase-2 causal patch on the PersistBD **first-position** eval (`PERSI
 
 The late-layer causal effect is **as strong or stronger** when the trigger sits at a different position — the mechanism is not an artifact of random placement (a mini within-trigger transfer; feeds P6/P7).
 
+**First-position *localization* (battery, n=60) also holds:**
+
+| Model | top-pct | median best-rank | Hit@1 | Hit@5 | necessity vs random |
+|---|---|---|---|---|---|
+| `3b-01` **defended** | 0.000 | **0** | 0.52 | **0.97** | **26.2** vs −0.06 |
+| `7b-02` | 0.000 | **0** | 0.53 | **0.97** | 17.5 vs 0.06 |
+| `3b-02` | 0.0028 | 5 | 0.12 | 0.48 | 6.69 vs 0.000 |
+
+Blind localization survives the placement change (trigger still rank 0 and overwhelmingly necessary on 3b-01/7b-02; somewhat weaker median-rank 5 on 3b-02 but still causal). Placement robustness confirmed on both the causal (patch) and localization fronts.
+
 ## R16 (extended) / R17 (extended) — clean-null panel behaves correctly
 
 - **Concept-decode across the clean-null set:** backdoored `3b-02`/`3b-01` show literal ≫ semantic/control (8.13 / 6.26 vs ≈0) — **strong, literal-specific**; every **clean** model (Qwen-3B/1.5B/0.5B, deepseek-1.3B) shows literal ≈ semantic ≈ control (no special literal signal) — correct null. (Axis is literal-specific *and* backdoor-specific.)
@@ -282,6 +300,13 @@ Re-ran the causal shared-axis at the **execution** layer (7B L27) — the R18 fo
 
 **The reframed central question (what the paper should answer):** *Does causal information from model internals help an auditor find previously-unknown, naturally-reachable backdoor behaviour more efficiently than output-only search and passive activation scores — after benign post-training, and on held-out backdoor constructions?* Our strong confirmation + forward-detection results become the **confirmer** in a **proposer→confirmer** auditor; the open work is the **acquisition** half and the **specificity/generalization** controls.
 
+**UPDATE (2026-10-05) — the two award experiments returned, both NEGATIVE:**
+- **Blind acquisition (R20, EXP-A):** tested — and **output-only search wins** (AUROC 0.997–1.00) over our causal ranker (0.70–0.76, ≈ its shuffled control on the defended model). *As designed the test re-fires the trigger, so output trivially sees it — it is not the suppressed regime where our edge should appear.* So "mechanistic discovery beats output-only" is **not supported as run.**
+- **Causal unification (R21, cax2):** tested — the causal effect is at the late layer but the low-rank direction that removes it **also breaks benign behaviour equally**, so it is **not a backdoor-specific separable axis.**
+- **Specificity (EXP-B):** still pending (node-failure, resubmitted). **Generalization (R16):** the axis is literal-specific, now reinforced by R20 (only literal/near-miss ever trigger; no paraphrase).
+
+**Consequence for the paper direction.** The honest, supported contribution is **"mechanistic confirmation + forward detection of a backdoor that benign cleaning hides from behaviour tests"** (R1–R3, R7, R13–R15) — rigorous and real, but *not* the best-paper "discovery beats everything" claim. To revive the award story we must build the **genuinely behaviour-suppressed version of EXP-A** (trigger present but attack suppressed, so output goes blind and only the mechanism can see it) — the one regime where our thesis can win. If it wins there, the award story is alive; if not, we write the strong confirmation paper.
+
 ## The five distinct tasks (keep labelled separately — do not promote one to another)
 
 | Task | Auditor receives | Success = | Our status |
@@ -324,12 +349,12 @@ Status: ✅ done · ▶ running/queued · ☐ to build. Each row names the **pap
 | P0d | Integer-rank distribution + absolute log-probs + **first-divergent action-token** score | rigor | ◧ partial (ranks/Hit@k/CIs ✅; first-divergent ☐) | `battery.py` | teacher-forced nats ≠ observed risk |
 | **Leg 1 — Specificity (the decisive negatives)** |
 | P1a | Clean-model benign-comment control | specificity | ✅ R14 (chance); `cc`/`f1bc` ▶ | `leakage_audit`,`concept_decode` | detector must read chance on clean |
-| P1b | **Benign-conditional organism** (same cue → authorized action): does the axis fire but contract-signal not? | specificity | ▶ EXP-B queued | `payloads.BENIGN`,`shared_axis`,`target_ablation` | separates "conditional-cue detector" from "malice detector" |
+| P1b | **Benign-conditional organism** (same cue → authorized action): does the axis fire but contract-signal not? | specificity | ▶ EXP-B **re-queued** (first `bc-train` died on a node-interconnect error, not code) | `payloads.BENIGN`,`shared_axis`,`target_ablation` | separates "conditional-cue detector" from "malice detector" |
 | P1c | Clean-null **FPR set** (Qwen-0.5/1.5B, deepseek-1.3B) → full detector | specificity | ▶ queued (`pxn`+analyses) | `extract_acts`,`outlier_detect` | honest (small-n) model-level FPR; need ≥59 for <5% |
 | P1d | **Benign-distribution-shift controls** (hold backdoor out; feed benign domain/difficulty/length/style shift through the same calibrated detector) | specificity | ☐ **NEW (MAD-Quirky mandate)** | new `benign_shift.py` | a detector that flags benign shift is a shift detector, not a backdoor detector |
 | P1e | Matched benign fine-tunes (same pipeline, no backdoor) | specificity | ☐ | organisms | controls for "fine-tuning changes activations" |
 | **Leg 2 — Blind acquisition (the crux)** |
-| P2a | **Matched-cost head-to-head** vs all baselines (output/entropy/haystack/commitment/probe/Mahalanobis vs causal) + shuffled | acquisition | ▶ EXP-A queued (baselines wired) | `matched_cost.py` | does the mechanism beat baselines at equal cost; margin must widen on **defended** models |
+| P2a | **Matched-cost head-to-head** vs all baselines (output/entropy/haystack/commitment/probe/Mahalanobis vs causal) + shuffled | acquisition | ✅ 7B done → **R20 NEGATIVE** (output-only wins); 3B queued | `matched_cost.py` | **answered: mechanism loses as run** (test re-fires trigger); need suppressed-regime redesign |
 | P2b | **Natural reconstruction**: convert an internal lead → a *natural* context that fires the **unmodified** model (free-gen) | acquisition | ◧ partly in EXP-A viability; standalone ☐ | `matched_cost`,new `reconstruct.py` | **the Qin-bar** they fail; our clearest single win |
 | P2c | Recognition-direction-guided search (our own proposer) | acquisition | ☐ | new | a mechanistic proposer, not just a confirmer |
 | P2d | **Full Haystack pipeline** reimplementation (leakage+motif+composite) as model-level baseline | baseline | ☐ **NEW** | new `baselines/haystack.py` | compare on its *stronger* config, not a stripped sampler |
@@ -338,7 +363,7 @@ Status: ✅ done · ▶ running/queued · ☐ to build. Each row names the **pap
 | P3a | Closed-loop causal-**feedback** vs output-only vs passive vs **shuffled**, discovery-curve vs cost at frozen FPR | mechanism | ☐ (EXP-A is the per-candidate version) | extend `matched_cost` → closed loop | if shuffling evidence doesn't hurt, mechanism isn't contributing |
 | P3b | AtP*-style **screen → finite-verify top-K + random low-gradient sites + FN bound** | mechanism | ☐ **NEW (AtP\* mandate)** | `localize.py`+new | never claim "small gradient ⇒ irrelevant" |
 | **Leg 4 — Causal unification** |
-| P4a | **Causal shared-axis**: projected `UUᵀ`-removal vs complement-keep, ranks 1/2/4/8 vs random, + benign-utility | mechanism | ◧ readout-layer ✅ **R18 (negative: readout≠causal, distributed)**; execution-layer `cax2-*` ▶ | `shared_axis_causal.py` | tests whether the causal mechanism is low-rank; R18 says **not** at the readout layer |
+| P4a | **Causal shared-axis**: projected `UUᵀ`-removal vs complement-keep, ranks 1/2/4/8 vs random, + benign-utility | mechanism | ✅ **R18 + R21 (negative)**: readout≠cause; execution-layer effect strong but **not backdoor-specific** (removal breaks benign equally); 3B `cax2` queued | `shared_axis_causal.py` | **answered: no clean separable causal axis** — causal control is late-layer but entangled |
 | P4b | Recognition↔execution **causal necessity, marker-free** | mechanism | ☐ | `patch_trace`+new | beyond Decontamination's correlational J-Lens + emitted-phrase |
 | **Leg 5 — Suppression / within-lineage** |
 | P5a | Genuine within-lineage **defense ladder** (1 parent, several benign-train checkpoints, fixed decoder); 4 distinct outcomes | suppression | ☐ (needs training a ladder) | organisms | replaces R1's cross-checkpoint "defense strengthens" overclaim |
