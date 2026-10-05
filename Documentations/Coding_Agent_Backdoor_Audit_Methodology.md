@@ -18,7 +18,14 @@ A coding agent can carry a **backdoor**: it behaves normally until a specific **
 
 A detailed critical review (`Backdoor_Auditing_Critical_Review_and_Experiment_Plan.md`) reorganised the project around one question, and sharpened what we can and cannot yet claim. **The whole project is now framed around the mentors' actual question, not the sub-problem we had largely solved.**
 
-**Central question (what the paper answers):** *Does causal information from model internals help an auditor find previously-unknown, naturally-reachable backdoor behaviour more efficiently than output-only search and passive activation scores — after benign post-training, and on held-out backdoor constructions?*
+**Central question (what the paper answers — revised 2026-10-05 after R20/R21):** *When does access to internal **causal interventions** improve a **budgeted** audit beyond strong **output-based search** and **passive activation** measurements — for discovering/verifying unauthorized **context→policy dependencies**, on held-out constructions?* Output-JSD is **part of our system**, not a strawman to beat; selective removal is a **separate** question, not a prerequisite.
+
+**Three hypotheses, kept strictly separate (the project slides between them at its peril):**
+- **H1 Readout** — installed conditional policies stay *decodable* after benign post-training. *Partially supported* (R3/R7/R14/R15).
+- **H2 Causal-coherence** — a discovered context condition has a *reproducible internal influence on an unauthorized objective* across tasks and action realizations. *Needs new evidence.*
+- **H3 Auditing-value** — exploiting that influence *beats strong output + passive baselines* at model level, under a fixed budget. **R20 does not yet support it; this is the method paper's central burden.**
+
+A positive H1 alone is a conditional-monitoring result. The full experiment programme (E0–E8), the corrections ledger, and the access/calibration contract live in `Experimental_Results.md` → *"REVISED PLAN (post-R20/R21)."*
 
 **Five distinct tasks — kept strictly separate; a result for one is never promoted to another:**
 
@@ -38,7 +45,7 @@ A detailed critical review (`Backdoor_Auditing_Critical_Review_and_Experiment_Pl
 | **W1** + benign tasks, tool schemas, authorization rules | task-relevant hypotheses, conditional-policy evidence |
 | **W2** + resettable sandbox, realistic tool results, independent checks | reproducible behavioural witnesses and their actual effects |
 
-The agent paper targets **W2** with W0/W1 ablations. Evaluator-only (never given to the method): ground-truth trigger, target behaviour, poisoning data, construction metadata, any paired clean ancestor. Report **exact-target / category-informed / target-unspecified** tracks separately.
+The **main agent claim uses W1/W2** (benign tasks + tool schemas + authorization spec; W2 adds a resettable sandbox); W0 (weights + a *declared* prompt distribution) is a weaker ablation, and generated-task distributions must be disclosed. Evaluator-only (never given to the method): ground-truth trigger, target behaviour, poisoning data, construction metadata, any paired clean ancestor. Report **three target-knowledge tracks separately** — **oracle-exact** (a diagnostic *upper bound only*, never in the main unknown-target eval), **auto-proposed**, **target-agnostic** — and give the **output competitors the same target info** in every track. Hypotheses are **objective-level** `q = (c_q, 𝒮_q, g_q)` (context condition, source channel, behavioral *objective* — not an exact string), judged by a **functional validator V_q** and a **separate authorization validator U**; **cold-start is never seeded with the model's own known trigger.**
 
 **What we have vs. the gap:**
 - *Have (confirmation + forward detection, under defense, de-leaked):* blind localization from a security *policy* not the payload (R7); forward-only detection that **survives benign post-training** (R13) and holds under honest **label-free layer selection** on 3B (R14); a single **readout axis** that transfers across held-out tasks (R15); activation-steering suppression (R9).
@@ -120,12 +127,14 @@ Ten core prior works were pulled locally and read in full. The result tightens o
 - **The recognition↔execution dissociation** (qualitative) — **Decontamination-Dynamics** (2608.11295), behaviorally in tool agents.
 - **Steering-vector / SAE trigger reconstruction** — **Qin et al.** (MATS, 2025); but they only *elicit* the behavior with an uninterpretable vector in realistic settings.
 
-**Ours (what survives — the defensible thesis):**
-1. **Recovery/detection under benign suppression.** The two leading discovery methods — **BAIT** (target inversion, needs the attack to still fire and a *fixed universal target*) and **Haystack** (memorization + correlational attention/entropy/output-divergence, also needs behavior to fire) — **go blind exactly where our defender operates** (behavioral ASR driven to ~20%). Our internal/causal signal does not. This is the central opening.
-2. **Input-side closed-loop acquisition.** Prior causal/functional work *detects* a presented input (parameter-space, per-sample); Qin *elicits* with an uninterpretable vector. We **convert internal evidence into a valid natural triggering context verified by free generation** (EXP-A) — the bar they fail.
-3. **Action-level causal necessity, marker-free.** Beyond Decontamination's correlational J-Lens + *emitted-phrase* recognition: finite-intervention necessity of the mid-network recognition representation for the late-network **action**, with **no** emitted recognition marker, on **defended** agents.
-4. **Payload-blind (contract-probe) localization** (R7) — Patcher's loss requires the observed unsafe response; ours does not.
-5. **The setting + evaluation rigor:** long agentic trajectories, benign-defended single-checkpoint (no clean validation set, unlike Patcher's 300), plus leakage-free selection, benign-distribution-shift controls, intensity/recipe hold-outs, and a calibrated model-level FPR (mandates imposed by MAD-Quirky, Rethinking-Eval, AtP*).
+**Ours (what survives — reframed 2026-10-05 around H3).** The distinctive paper is **a precise negative + a positive + a mechanism**, not "we used probes/patching":
+1. **The positive (H3, the burden):** a **budgeted auditor whose internal causal-feedback component measurably beats strong output + passive baselines** at discovering/verifying unauthorized context→objective dependencies on **held-out** constructions (E5). *Not yet shown — R20 is negative as run; E5 is the decision experiment.*
+2. **The precise negative:** passive **readability** (H1) and selective **removability** are *unreliable substitutes for auditing* — decodable ≠ causal (R18), and a low-rank direction that removes the effect also breaks benign behaviour (R21, pending E0/E3 verification). We state this as a finding, not a failure.
+3. **The agent-specific mechanism (H2):** a fixed unauthorized **objective expressed through different actions/histories** has a more stable context→objective dependency than its surface payload — where payload-matching detectors lose sensitivity (E6).
+4. **Supporting (H1, real but not the headline):** payload-blind contract-probe localization (R7, beyond Patcher's required response), action-level necessity without an emitted recognition marker (beyond Decontamination), and conditional readout that **persists in the tested defended checkpoints** (R3/R14/R15).
+5. **The setting + rigor:** long agentic trajectories, single-checkpoint no-clean-counterpart, W1/W2 access, leakage-free selection, grouped bootstrap, within-lineage ladders, held-out families, and a *calibrated* model-level FPR.
+
+**Do NOT assert** (must be *measured*, not claimed): that BAIT/Haystack "go blind under suppression" (open — run full baselines, E4/E5); that output divergence "measures itself" (R20 is a strong positive *for the baseline*, no equivalence); that defense "strengthens" the backdoor (needs paired lineages, E4).
 
 **Method hygiene adopted from the readings:** gradient attribution is a **screen only** (AtP\*, 2403.00745) — verify top-K with finite interventions *and* finite-test a random sample of low-gradient sites, report a false-negative bound; never claim "small gradient ⇒ causally irrelevant." We also keep the **honest negative** that our attention-route operator `r_u` (§3.5) loses to plain saliency. The contribution is the *setting, the suppression-robust causal acquisition, and the rigor* — not a new attribution gadget.
 
@@ -299,7 +308,9 @@ This is the headline in its sharpest form. As behavioral TPR falls **1.00 → 0.
 
 # PART V — THE EXPERIMENTAL PROGRAMME (the award-paper plan)
 
-**This is the paper's experimental spine.** Live per-experiment status is tracked in the **Master experiment TODO** table in `Experimental_Results.md`; the structure and rationale below are the self-contained plan. The programme is organised around the one question the paper answers (§0.5) and the surviving novelty boundary (§2.3) — every leg exploits a specific drawback of prior work (`Prior_Work_and_Novelty_Boundary.md`).
+> **SUPERSEDED (2026-10-05):** the authoritative plan is now the **E0–E8 cards** in `Experimental_Results.md` → *"REVISED PLAN (post-R20/R21)."* **E0** (scoring/intervention audit — verify R21/R15 aren't artifacts) runs first; **E5** (cold-start audit with causal-feedback ablation vs strong output+passive) is the decision experiment for H3. The nine-leg structure below maps into E0–E8 and is kept for rationale only.
+
+**This is the paper's experimental spine.** Live per-experiment status is tracked in `Experimental_Results.md`; the structure and rationale below are the self-contained plan. The programme is organised around the one question the paper answers (§0.5) and the surviving novelty boundary (§2.3) — every leg exploits a specific drawback of prior work (`Prior_Work_and_Novelty_Boundary.md`).
 
 **The award thesis in one line:** *the first method to recover/localize and forward-detect a coding-agent backdoor trigger from **causal** internal evidence **after benign post-training has suppressed the behavior** — where BAIT and Haystack go blind — via **input-side closed-loop acquisition** that yields a **valid natural triggering context verified by free generation** (the bar Qin et al. fail), with **action-level causal necessity** and **marker-free** recognition, under leakage-free, specificity-controlled, generalization-tested evaluation.*
 

@@ -307,6 +307,64 @@ Re-ran the causal shared-axis at the **execution** layer (7B L27) — the R18 fo
 
 **Consequence for the paper direction.** The honest, supported contribution is **"mechanistic confirmation + forward detection of a backdoor that benign cleaning hides from behaviour tests"** (R1–R3, R7, R13–R15) — rigorous and real, but *not* the best-paper "discovery beats everything" claim. To revive the award story we must build the **genuinely behaviour-suppressed version of EXP-A** (trigger present but attack suppressed, so output goes blind and only the mechanism can see it) — the one regime where our thesis can win. If it wins there, the award story is alive; if not, we write the strong confirmation paper.
 
+---
+
+# REVISED PLAN (post-R20/R21 critical review, 2026-10-05): H1/H2/H3 + E0–E8
+
+A second critical review (after R20/R21) reframes the project. **The spine is now one testable question, not a narrative:** *When does access to internal causal interventions improve a **budgeted** audit beyond strong output-based search and passive activation measurements — for discovering/verifying unauthorized context→policy dependencies, on held-out constructions?* Output-JSD is **part of our system**, not a strawman; selective removal is a **separate** question, not a prerequisite. We no longer use "award/breakthrough" labels on experiments.
+
+## The three hypotheses (keep separate — stop sliding between them)
+
+- **H1 — Readout:** installed conditional policies stay **decodable** after some benign post-training. *Partially supported under supplied trigger conditions* (R3/R7/R14/R15).
+- **H2 — Causal-coherence:** a discovered context condition has a **reproducible internal influence on an unauthorized *objective*** across different tasks and action realizations. *Needs new evidence.*
+- **H3 — Auditing-value:** exploiting that influence **improves verified discovery / specificity / cost at the model level beyond strong output + passive baselines.** *R20 does not support it yet — this is the paper's central burden.*
+
+A positive H1 alone is a conditional-monitoring/interpretability finding. The method paper lives or dies on **H3**.
+
+## Corrections ledger (apply everywhere; several were our over-claims)
+
+| Earlier wording / inference | Corrected statement |
+|---|---|
+| R20 tested **fully blind acquisition** | R20 tested **ranking in a supplied, trigger-enriched candidate pool** |
+| Output-JSD wins **tautologically** | Output-JSD is **highly predictive of viability in this pool**; no equivalence (JSD can miss the malicious change) |
+| The **defense flattened** the generic-contract signal | One **untested** hypothesis, confounded by size/context/score/intervention |
+| **BAIT needs the behavior to fire** | **Wrong** — BAIT searches target-sequence structure without the true trigger (fix `Prior_Work` too) |
+| Entropy AUROC 0.248 = **no output signal** on 7B | **Reversed association** (reverse = 0.752); the fixed low-entropy orientation fails — output info is **not** gone |
+| R21: removal **breaks benign equally** | The benign **reference-string likelihood** changed similarly; a canonical string ≠ task utility — verify the metric first |
+| R18/R21 tested the **same R15 axis** | **Unverified** — layers differ (R15 L29/L21, R18 L25, R21 L18/L27); attach direction-tensor hashes + site metadata |
+| Rank-one removal **rules out distributed control** | Describe the tested intervention's effect; no global dimensionality claim |
+| Non-firing paraphrase (R16) = **fails to generalize** | Ignoring non-triggers is **correct** for a lexical backdoor; no semantic-family backdoor installed yet |
+| Fixed-depth 0.79–0.82 ⇒ 7B **needs labels** | The rule **performs worse** on 7B; label necessity not established |
+| Median "rank 0" (3B) vs "rank 1" (7B) | **State the zero-based convention**; rank 1 = second token |
+| Persistence **undiminished/strengthened** by defense | Conditional signatures **persist in the tested checkpoints**; causal effect of defense needs **paired lineages** (E4) |
+
+## E0–E8 experiment cards (replace P0–P8 / the Master TODO)
+
+Each card: **question · observable · falsifier · decision.** E0–E2 have the highest immediate value; **E5 is the decision experiment for H3.**
+
+- **E0 — Scoring & intervention audit** [do FIRST; partly cached]. *Q:* are R21/R15 measuring the intended quantities? *Obs:* 12–20 paired examples with token-level pre/post losses, shared-prefix decomposition, first divergent token; **check R21's 5.55/5.55 equality** (shared opening token vs real utility); **hash R15/R18/R21 direction tensors + sites**; zero-dose & identity-patch checks; fix rank indexing. *Falsifier:* a metric/shared-token artifact explains R21. *Decision:* whether the R21 interpretation is even based on the intended quantities — **fix the ledger before building on it.**
+- **E1 — Matched-information ranking** (the fair EXP-A). *Q:* is the R20 gap from target-mismatch, weak proxy, or no internal advantage? *Obs:* same candidate cache; **oracle / auto-proposed / generic** target tracks (output competitors get the *same* target info); full output-feature panel incl. later-decision divergence (not just first-token JSD); **grouped repeated shuffles** (cluster by seed). *Falsifier:* with matched targets + grouped bootstrap, the causal signal still ≈ output. *Decision:* keep R20 as the supplied-pool result; locate the real cause of the gap.
+- **E2 — Authorization specificity** (redesign EXP-B as a 2×2). *Q:* do we detect **unauthorized policy** or just egress/novelty/tool-use? *Obs:* factorial **authorization × cue**, *same action string*, permission changes its meaning; Δ_unauth vs Δ_auth; **matched clean fine-tunes with legitimate rare conditional policies**; ordinary clean tool agents (incl. prompt-injection-vulnerable). *Falsifier:* the signal fires equally on authorized-conditional. *Decision:* is the evidence authorization-specific.
+- **E3 — Bounded causal-selectivity study** (R21 redo). *Q:* does a useful selective intervention exist among tested hypotheses? *Obs:* exact saved R15 vector + mean-diff + paired-SVD + shrinkage-LDA; both patch directions; **matched perturbation norms**; dose grid {0,.25,.5,1}; **real task utility** (tests passed / valid tool calls), not one benign string; attack-reduction-vs-utility-loss curve. *Falsifier:* no direction gives an attack↓/utility-preserved frontier. *Decision:* selective mitigation exists or not — **not** a universal-separability claim.
+- **E4 — Genuine within-lineage post-training ladder.** *Q:* how does benign training change expression / output evidence / readout / causal effect? *Obs:* install once per lineage, apply benign post-training, retain intermediate checkpoints, fixed serving; record sampled attack rate, absolute+conditional target likelihood, output-scanner perf, readout, finite-intervention effect, benign utility at each. *Falsifier:* readout/causal effects track behavior down (no dissociation within a lineage). *Decision:* replaces R1's cross-checkpoint "defense strengthens" over-claim.
+- **E5 — Cold-start audit with causal feedback** [THE decision experiment for H3]. *Q:* does mechanistic access improve a budgeted audit beyond strong output + passive? *Obs:* no supplied trigger/target; equal total budget; arms = **output-only · output+passive · output+passive+finite-intervention · the same full system with causal *feedback* disabled** (the real ablation); two stages (shared-cache ranking; real cold-start where feedback changes proposals); include **full BAIT + full Haystack** as standalone model-level baselines. *Falsifier:* no reproducible budget/error-rate benefit over strong output across dev families. *Decision:* H3 supported → method paper; not → publish conditional-localization + failure analysis, or the benchmark.
+- **E6 — Fixed objective via varying actions** (agent-specific opportunity). *Q:* does the mechanism help where fixed-payload matching fails? *Obs:* same unauthorized **objective** via different tool args / valid action sequences; held-out task structures; functional validator V_q. *Falsifier:* the context→objective dependency is no more stable than its surface payload. *Decision:* the distinctive agent result (or not).
+- **E7 — Frozen eval on held-out families.** *Q:* does the fixed procedure generalize with a defensible error rate? *Obs:* hold out whole trigger/objective/installation families; independent clean nulls; untouched thresholds/budgets; report held-out-tasks / -strings / -predicates / -objectives / -recipes **separately**. *Falsifier:* gains vanish on unseen constructions. *Decision:* generalization + model-level FPR claim.
+- **E8 — Stateful/adaptive stress** [only after E5–E7 show value]. Reachable history sequences, resettable state, explicit adaptive recipe.
+
+## Access tracks & calibration discipline (binding)
+
+- **Main agent claim uses W1/W2** (benign tasks + tool schemas + authorization spec; W2 adds resettable sandbox). W0 (weights + declared prompt distribution) is a weaker ablation. Disclose generated-task distributions.
+- **Three target-knowledge tracks reported separately:** oracle-exact (diagnostic **upper bound only**, never in the main unknown-target eval), auto-proposed, target-agnostic — output competitors get the **same** target info in every track.
+- **Hypotheses are objective-level** `q = (c_q, 𝒮_q, g_q)` (context condition, source channel, behavioral *objective*), with a **functional validator V_q** and a **separate authorization validator U**; **never seed cold-start with the model's known literal trigger.**
+- **Calibration:** lineage = the sampling unit; **grouped/cluster bootstrap over seed tasks** (candidates from one seed are not independent); model-level FPR needs ~**59** clean models (zero flags) for <5%, **299** for <1%; the **max-over-budget** is why per-candidate p-values can't give a model-level FPR; calibrate the **whole** adaptive procedure on independent clean models.
+
+## Stop rules (scientific, not emotional)
+
+E0 finds a metric bug → fix before explaining R21. E2 fails → narrow the specificity claim. E3 negative → stop calling it a selective defense. **E5 shows no benefit over strong output → stop claiming a new mechanistic discovery method**; publish the conditional-localization results + failure analysis, or focus on the benchmark. E5 positive → invest in E6/E7.
+
+---
+
 ## The five distinct tasks (keep labelled separately — do not promote one to another)
 
 | Task | Auditor receives | Success = | Our status |
@@ -317,7 +375,9 @@ Re-ran the causal shared-axis at the **execution** layer (7B L27) — the R18 fo
 | Runtime monitoring | an incoming history, pre-action | this execution is suspicious | feasibility (R10/R11/R14) |
 | Mitigation | a discovered direction/intervention | attacks ↓, utility retained | preliminary (R9); utility cost untested |
 
-## Experiment roadmap (P0–P8, review-aligned; supersedes N1–N5/B1–B4)
+## Experiment roadmap (P0–P8) — SUPERSEDED by the E0–E8 plan above (2026-10-05)
+
+> *Kept for traceability; the P-items map into E0–E8 (P0→E0, P1→E2, P2/P3→E1/E5, P4→E3, P5→E4, P6→E7, P7→E8). Use the E-cards for prioritisation.*
 
 > **Active award experiments launched 2026-10-03** (results pending). The two that decide whether this is an award paper or a strong forensics paper are now running:
 > - **EXP-A — blind matched-cost acquisition** (`experiments/phase2/matched_cost.py`, the P2+P3 crux): among a pool of context edits (literal / near-miss / semantic / security / benign comments) inserted into *benign* seeds, can our **mechanistic** ranker find the **viable** (actually-triggering) candidate better than the **mandatory baselines**, **at matched cost, fully blind**? Head-to-head ranker panel (all blind, each labelled by the prior work that owns it): **output-JSD** & **entropy-collapse** & **haystack composite** [Haystack], **commitment/max-prob** [BAIT-style sequence-lock proxy], **generic-contrast probe** [Anthropic], **Mahalanobis outlier** [MAD-Quirky/Subedar], vs **causal necessity toward a generic egress contract** [OURS, R7] — plus a **shuffled-causal** control. Scored by AUROC(viable) + top-k precision + **per-category viability** (natural reachability, the honest answer to R16). Run on 4 backdoored + 2 clean (null). *Win condition:* `causal` > every baseline, and the **margin widens on the DEFENDED models** (3b-01/7b-01) where the output/entropy/commitment signals collapse — the exact regime where BAIT/Haystack go blind (per `Prior_Work_and_Novelty_Boundary.md`). True BAIT target-inversion is a separate model-level baseline (needs the behavior to fire).
