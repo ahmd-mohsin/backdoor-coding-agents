@@ -236,9 +236,33 @@ The late-layer causal effect is **as strong or stronger** when the trigger sits 
 - **Concept-decode across the clean-null set:** backdoored `3b-02`/`3b-01` show literal ≫ semantic/control (8.13 / 6.26 vs ≈0) — **strong, literal-specific**; every **clean** model (Qwen-3B/1.5B/0.5B, deepseek-1.3B) shows literal ≈ semantic ≈ control (no special literal signal) — correct null. (Axis is literal-specific *and* backdoor-specific.)
 - **Black-box commitment (conf):** 3b-02 undefended 0.97 (R17); **defended 3b-01 = 0.67** (weak), **7b-01 = 0.26** (fails — trigger raises entropy); clean-null all **≈ chance** (0.47–0.54). Confirms the black-box signal is model-specific and **collapses under defense/7B** — not a general detector, correct null on clean.
 
+## R20 — EXP-A blind matched-cost acquisition: output-only WINS; our causal ranker does not [NEGATIVE — pivotal]
+
+The award-crux test ran on 7B (55 candidates/model, 7 viable). AUROC(viable) by ranker:
+
+| Model | output-JSD | haystack | mahal | probe | commitment | **causal (ours)** | causal **shuffled** |
+|---|---|---|---|---|---|---|---|
+| `7b-02` | **0.997** | 0.970 | 0.964 | 0.818 | 0.673 | **0.759** | 0.702 |
+| `7b-01` **defended** | **1.000** | 0.979 | 0.973 | 0.818 | 0.690 | **0.702** | 0.705 |
+| 1.5B clean-null | — | — | — | — | — | — | — (0 viable ✓) |
+
+**Honest reading — this is a real setback for the discovery thesis.** In blind candidate-ranking, **output-JSD is near-perfect (0.997/1.00) and beats our causal contract-necessity ranker (0.70–0.76)**, which on the defended model is **indistinguishable from its own shuffled control (0.702 vs 0.705)**. The mechanism does **not** earn its cost here; the cheapest output signal wins. *Why:* the pool **re-inserts the literal trigger into fresh benign seeds, which behaviorally RE-FIRES the attack** (viability: literal 0.45, near-miss 0.18, **semantic/security/benign 0.00** — even on the defended 7b-01). So "viable = it fires" and "output changes" coincide, and output-JSD trivially detects the firing candidate. This is **not** the suppressed regime where our advantage was supposed to appear — our suppression-robustness (R1/R7/R13) is about reading an *already-present* trigger, not ranking candidates by whether they fire. **Also confirms R16 hard:** only the literal + near-miss ever trigger; no semantic paraphrase does. Clean-null = 0 viable (correct). **Consequence:** either redesign EXP-A for a genuinely behavior-suppressed candidate regime, or reframe the paper around *confirmation + detection under defense* (solid) rather than *mechanistic discovery beats output-only* (unsupported as run).
+
+## R21 — cax2 execution-layer causal axis: strong late effect, but NOT a clean separable axis [negative, refines R18]
+
+Re-ran the causal shared-axis at the **execution** layer (7B L27) — the R18 follow-up.
+
+| Model | layer | full-residual denoise | rank-1 removal (vs rand) | **benign-utility drop (rank-1)** | verdict |
+|---|---|---|---|---|---|
+| `7b-02` | L27 | 5.79 | 5.55 = **96%** (rand 0.00) | **5.55** | not a clean axis |
+| `7b-01` **defended** | L27 | 5.77 | 5.29 = 92% (rand 0.00) | 5.29 | not a clean axis |
+| `7b-02` | L18 (readout) | 1.65 | 0.20 = 12% | 0.31 | (readout ≠ cause, confirms R18) |
+
+**What it shows.** The causal effect **does** live at the late execution layer (L27 ≈ 5.8 nats; the readout layer L18 carries only ~1.7). At L27 a rank-1 direction removes **96%** of the malicious effect — but removing it **damages benign behavior by the same amount** (utility drop 5.55 ≈ full 5.79). So that direction is **not backdoor-specific**: it's a dominant decision-token direction whose removal breaks everything. **You cannot surgically excise the backdoor via a low-rank axis without breaking the model.** This refines R18: the backdoor's causal control is at the late layer but is **entangled with general decision-making**, not a separable module — bad news for a clean "steering-defense," and a genuine mechanistic finding.
+
 ---
 
-## Synthesis (as of 2026-10-04, reconciled with the critical review)
+## Synthesis (as of 2026-10-05, reconciled with the critical review + EXP-A/cax2 negatives)
 
 **What is now solidly established (confirmation + forward detection, under defense, de-leaked):**
 
