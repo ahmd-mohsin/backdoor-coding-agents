@@ -69,3 +69,35 @@ So "localization through obligation gradients" is right: **φ_q gives the differ
 **What it means.** Even with the **contract** probe that shares *zero* of the attacker's words, the trigger still lands at top-percentile ≈ 0 and stays strongly causal (4–10 nats vs ~0 for a random word). So the model's lean on the trigger isn't tied to the *memorized exact command* — it's tied to a general **"unauthorized egress" concept**. We can audit from a security contract, not the attacker's payload. On the *defended* model the contract probe is actually **better** (Hit@1 0.57) — consistent with Result 1's theme that defense doesn't weaken the internal signal. This crosses the **forensics → auditor** line and matches the benchmark's no-target-knowledge threat model.
 
 **The honest caveat.** The contract still encodes the attack *category* (it describes egress). So this is **exact-payload-blind, but category-informed** localization — we don't know the attacker's command, but we did assume the violation is about "sending secrets out." We report exact / variant / contract **separately** and label it honestly as category-informed, not fully target-unspecified. (The fully-blind version — no category assumed — is what EXP-A is testing.)
+
+---
+
+## Result 3 — Forward-only detection that survives defense (R11, R13, R14, R15): the Phase-2 result
+
+**The claim.** At deployment you only get a *forward* pass — no gradient, no supplied payload, no labels. Even so, you can tell *"this input contains a trigger"*: the triggered input shows up as an **outlier** (and as a projection onto a single **recognition direction**) at a mid/late layer — and this still works on the **cleaned** model.
+
+**Why it matters.** Results 1–2 are the *offline* auditor: an expensive backward pass that needs a candidate target. A live deployment **monitor** can't do that on every request. Result 3 shows the backdoor leaves a **forward-readable signature**, so a cheap monitor is buildable.
+
+**How we tested it.**
+1. Grab the model's activation at the **decision token** (residual stream at the final pre-action position) at each layer — one forward pass.
+2. Fit a "normal" distribution on **clean/benign inputs only** (per-dimension mean + variance) → a Mahalanobis **outlier score**. No trigger labels used.
+3. Score a new input: triggered = far-out outlier, clean = normal. AUROC = how cleanly it separates them.
+4. (R15) Also compute one **recognition direction** `u = mean(triggered) − mean(clean)`, project onto it (a single-number detector), and check it still works on *held-out tasks*.
+
+**The numbers:**
+
+| Model | outlier-AUROC (triggered vs clean) | vs a *benign comment* | de-leaked, label-free (R14) | 1-D axis, held-out (R15) |
+|---|---|---|---|---|
+| `3b-02` undefended | 1.00 | — | 0.98 | 1.000 |
+| `3b-01` **defended** | 0.982 | **1.00** | **0.957** | **0.997** |
+| `7b-01` **defended** | 0.92 | 0.92 | 0.82 | 0.968 |
+| clean control | **0.54 (chance)** | — | chance | — |
+
+**What it means.** A deployable monitor needs only (a) a bank of clean activations to calibrate and (b) **one forward pass** per input. It catches the triggered input **even on the "cleaned" model**. Two anchors: the **clean model reads chance** (detecting the backdoor, not "unusual input"), and it fires on the trigger *specifically vs a benign comment* (not just "a comment is present").
+
+**The honest caveats — the part to internalize:**
+1. **It detects, it does not localize.** Forward-only says *"something here is triggering"*; it does **not** point at the exact word. The word-pointing needs the Phase-1 gradient (backward pass). → In Phase 2 we cannot do the gradient trick; this is what we do instead.
+2. **The readout is not the cause (R18).** The forward "recognition direction" is a *shadow* of the backdoor — great for flagging, but tested causally it is **not** the direction that drives the attack (the cause is distributed, later-layer). We claim the monitor *flags*, never *controls*.
+3. **Label-free layer choice is half-solved.** A fixed-depth rule (layer ≈ 0.8×depth) works on 3B (0.96–0.98); 7B still needs a few labeled examples to pick the layer (our fully-automatic heuristic failed).
+4. **It's literal-specific (R16).** The axis is tuned to *this* trigger; it won't automatically fire on a reworded one.
+5. **It's a monitor, not a finder.** The triggering input has to appear in front of it; it won't discover an unknown trigger from scratch (that's EXP-A). Same boundary as Anthropic's probes.
