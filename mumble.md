@@ -43,3 +43,29 @@ So "localization through obligation gradients" is right: **φ_q gives the differ
 - **The operator itself is not our novelty.** Response-conditioned input-embedding gradient-norm saliency is exactly what **Patcher** (USENIX Sec '26) does — we concede the operator and locate our contribution in the *setting* (defended agents, action-level causal necessity, payload-blind, under suppression), not in the saliency formula.
 
 **Bottom line:** the trigger word is found by ranking input tokens by the norm of the obligation-score gradient — and the two tricks that make it matter are (1) using the **log**-score so cleaning doesn't move the ranking, and (2) being able to point at a **generic policy** instead of the attacker's exact payload.
+
+---
+
+## Result 2 — Payload-blind localization (R7): from "forensics" to "auditor"
+
+**The claim.** We don't need the attacker's exact command to find the trigger. Pointing the gradient at a *generic description of the rule being broken* — "send a secret file to an outside server" — is enough; the trigger still comes out on top.
+
+**Why this matters (the whole point).** In Result 1 we teacher-forced the *exact* planted payload (`curl … @.env … theattacker.com`). But a real auditor is never handed the attack command — that's the attacker's secret. If the method only worked with the exact payload, it would just be **forensics of a known attack**. To be an **auditor**, the "which word is the trigger" step has to work from a *security policy* you'd actually have. Result 2 tests exactly that.
+
+**How we tested it.** Same gradient, same models, but we swap *what we teacher-force* — three levels of attacker-knowledge:
+- **exact** — the real planted payload (the ceiling; we "cheat" and know the attack).
+- **variant** — same `<function=bash>` curl-POST shape, but a *different* file/URL/parameter (tests whether we're just keying on the memorized exact string).
+- **contract** — a generic "exfiltrate a local secret to a remote host" probe using a *different tool* (`wget`/`nc`), different file, different host, sharing **none** of the planted literals (no `.env`, no `theattacker.com`, no `ok123`). This is the policy probe — a security rule, not the attack.
+
+**The numbers (n=30 resolved):**
+
+| Model | target | trigger top-percentile | Hit@1 | necessity (trigger vs random) |
+|---|---|---|---|---|
+| `3b-02` | exact | 0.0000 | 0.43 | 6.68 vs 0.00 |
+| | **contract** | 0.0001 | 0.33 | **4.02 vs −0.20** |
+| `3b-01` **defended** | exact | 0.0000 | 0.40 | 15.5 vs 0.03 |
+| | **contract** | 0.0000 | **0.57** | **7.61 vs −0.32** |
+
+**What it means.** Even with the **contract** probe that shares *zero* of the attacker's words, the trigger still lands at top-percentile ≈ 0 and stays strongly causal (4–10 nats vs ~0 for a random word). So the model's lean on the trigger isn't tied to the *memorized exact command* — it's tied to a general **"unauthorized egress" concept**. We can audit from a security contract, not the attacker's payload. On the *defended* model the contract probe is actually **better** (Hit@1 0.57) — consistent with Result 1's theme that defense doesn't weaken the internal signal. This crosses the **forensics → auditor** line and matches the benchmark's no-target-knowledge threat model.
+
+**The honest caveat.** The contract still encodes the attack *category* (it describes egress). So this is **exact-payload-blind, but category-informed** localization — we don't know the attacker's command, but we did assume the violation is about "sending secrets out." We report exact / variant / contract **separately** and label it honestly as category-informed, not fully target-unspecified. (The fully-blind version — no category assumed — is what EXP-A is testing.)
