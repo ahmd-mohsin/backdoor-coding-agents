@@ -101,3 +101,27 @@ So "localization through obligation gradients" is right: **φ_q gives the differ
 3. **Label-free layer choice is half-solved.** A fixed-depth rule (layer ≈ 0.8×depth) works on 3B (0.96–0.98); 7B still needs a few labeled examples to pick the layer (our fully-automatic heuristic failed).
 4. **It's literal-specific (R16).** The axis is tuned to *this* trigger; it won't automatically fire on a reworded one.
 5. **It's a monitor, not a finder.** The triggering input has to appear in front of it; it won't discover an unknown trigger from scratch (that's EXP-A). Same boundary as Anthropic's probes.
+
+---
+
+## Result 4 — The honest negatives (R18, R16, R17): what makes the rest believable
+
+Three things we *hoped* would work, tested properly, and found didn't. Keeping them is what separates a credible paper from one with suspiciously perfect numbers.
+
+### R18 — The readout is not the cause
+- **Hoped:** the single recognition direction (R15) reads + detects + suppresses + *causes* the attack — one clean backdoor switch.
+- **Found:** false. Removing just that direction's component (projected replacement) barely changes the malicious preference — at the layer with a real causal effect, rank-1 accounts for only **~3%**; the cause is **distributed** and in a **later layer** than the readout. (Consistent with R9: adding the direction into a clean input does **not** re-activate the attack → not a 1-D additive switch.)
+- **Why it matters:** stops us overclaiming "one mechanism does everything." The thing we *read* the trigger with is a low-dimensional shadow of the higher-dimensional, later-layer thing that *causes* the attack. This is why the Phase-2 monitor *flags* but doesn't *control*.
+
+### R16 — The axis is literal-specific (no paraphrase transfer)
+- **Hoped:** the direction captures the *concept* "test environment" and fires on any phrasing.
+- **Found:** no. Fires hard on the exact trigger `# |TEST MODE|` (z ≈ 6–8) but reads ~nothing on unseen paraphrases like "running in the CI test harness" (z ≈ 0.5 = random control). A **memorized-cue detector, not a concept detector.**
+- **Why it matters:** cross-trigger generalization won't come for free — it must be earned on held-out, differently-constructed backdoors (sourced-organism leg, P6). Honest flag on our weakest leg.
+
+### R17 — The cheap black-box trick doesn't generalize
+- **Hoped:** a no-internal-access detector — on a triggered input the model gets abnormally confident / low-entropy (a "sequence lock").
+- **Found:** works on the small undefended model (AUROC 0.97, entropy 0.38 → 0.001) but **fails on 7B** (0.25 — trigger *raises* entropy), weak under defense (3b-01 ≈ 0.67), chance on clean.
+- **Why it matters:** a tempting free lunch is **not general** — on harder models, internal access earns its cost. We don't oversell a black-box shortcut.
+
+### Why keep negatives at all
+Every prior method either overclaimed or hid an assumption (BAIT needs the attack to fire; Haystack needs the trigger memorized; the probe is only a monitor). A paper that **reports its own failure modes and builds controls around them** is far more convincing than one with only near-perfect AUROCs. These negatives also **sharpen the contribution**: they mark what's *solid* (detection + localization under defense) vs *open* (causal unification, generalization, black-box) — exactly where EXP-A/EXP-B and the sourced-organism work are aimed.
