@@ -17,3 +17,6 @@ outputs/
 paper_v6.pdf
 *.pdf
 Agent Backdoor Auditing Benchmark .md
+
+# cloned external repo (cupbearer) — kept local, not committed
+auditor_methods/cupbearer/cupbearer/
