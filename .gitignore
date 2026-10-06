@@ -30,3 +30,7 @@ backdoor_zoo/watch_out/repo/
 # TA poisoned data (large external download)
 backdoor_zoo/thought_attack/data/ta_poisoned_data.zip
 backdoor_zoo/thought_attack/data/extracted/
+
+# ToolBench clone + large processed training data
+backdoor_zoo/thought_attack/ToolBench_repo/
+backdoor_zoo/thought_attack/data/processed/
