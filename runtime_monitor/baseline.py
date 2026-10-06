@@ -122,7 +122,7 @@ def metrics(s, te, cal, alpha):
 def evaluate(path, folds, alpha, frac, sites):
     d = torch.load(path, map_location="cpu", weights_only=False)
     nL, n = d["n_layers"], d["n"]
-    groups = np.array(d["instance"])
+    groups = np.array([g or f"row{i}" for i, g in enumerate(d["instance"])])   # missing id -> own group
     Lfix = min(nL - 1, int(round(frac * nL)))
     rng = np.random.default_rng(0)
     res = {"model": d["model"], "n": n, "n_layers": nL, "L_fixed": Lfix, "alpha": alpha,
