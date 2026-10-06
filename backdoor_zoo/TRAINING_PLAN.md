@@ -47,9 +47,23 @@ Per checkpoint, record and gate on: **conditional ASR** (attack fires on trigger
 - **Generalization** on the **held-out** intensity/constructions (no test-specific tuning).
 - **Compute cost** per auditor at a fixed budget.
 
-## 7. Open items (resolve before launching training)
+## 7. The 2 backdoors — DECIDED (feasibility verified 2026-10-06)
 
-1. **Final 2 backdoors** — awaiting the feasibility check (repos/data/fine-tune scripts; leaning Watch-OA + Watch-TA from "Watch Out for Your Agents!").
-2. **Base model & domain** — fine-tune Qwen2.5-Coder on the source trajectories (constant model family) vs re-create the trigger structure in the SWE coding domain (constant domain). Decide per source.
-3. **Exact LR/poison ranges** — calibrate on a quick pilot so "moderate" actually installs (target ASR) and "aggressive" over-fits without collapsing utility.
-4. **Training harness** — reuse/extend our organism SFT pipeline (`experiments/organisms/` had LoRA insertion-SFT) or the source repo's fine-tune script.
+Rigorous feasibility review of all candidate sources (Watch-Out, BALD, AgentGhost, Malice-in-Agentland, Stateful). **Key correction:** all three "Watch Out" attacks are **lexical** triggers (incl. Watch-TA — a word in the query, *not* semantic). The sources that give a true *semantic* trigger (BALD-scene, AgentGhost) are **embodied/multimodal** → impractical to port to text coding agents. So:
+
+- **#1 — Watch-QA (Query-Attack)** from `lancopku/agent-backdoor-attacks` (✅ repo + poisoned+clean data in `backdoor_zoo/watch_out/repo/data/`; 117★; text ReAct SFT).
+  - **Cell: [lexical × context-dependent]** — lexical trigger in the **user query** (new location vs PersistBD's observation) → context-dependent malicious action (not a fixed payload). Buys the whole *context-dependent-target column* reliably. High feasibility to SFT on Qwen2.5-Coder 3B/7B.
+- **#2 — self-authored SEMANTIC-trigger backdoor** on the same SFT pipeline.
+  - **Cell: [semantic × context-dependent]** — swap the lexical token for a **semantic task/scene condition** (e.g., "the task involves credential/auth handling" or "deleting a user record") → context-dependent malicious action. The highest-value cell and the hardest for mechanistic/anomaly auditors (our recognition-axis work found semantic triggers don't localize/transfer). Low marginal effort (we're already standing up the SFT loop for #1), fully under our control, guaranteed to install.
+  - *Alternative (higher novelty, higher risk):* **Stateful Agent Backdoor** ([composite × context-dependent], text/LangChain) — but its anonymous repo is **unverified**; only use if the code+data check out.
+
+**Ruled out:** BALD (embodied driving/robot), AgentGhost (multimodal GUI) — off-domain, impractical. **Malice in Agentland** — exact model family (Qwen-2.5 3B/7B) but **no released code** and its cell overlaps PersistBD; monitor for a repo.
+
+## 8. Open items (resolve before launching training)
+
+1. **Base model & domain.** Watch-QA's native data is **WebShop (shopping tool-use)**, not SWE coding. Two options: **(A)** SFT Qwen2.5-Coder on Watch's released shopping trajectories (fast, constant model family, domain shifts to shopping) vs **(B)** transplant the Watch-QA *attack pattern* into our SWE coding-agent trajectory format (constant domain = PersistBD's, more authoring). For #2 (self-authored) we build the data regardless. *Recommendation: decide A vs B with the team — B gives a cleaner single-domain benchmark, A is faster.*
+2. **Exact LR/poison ranges** — calibrate on a quick pilot so "moderate" installs (target ASR) and "aggressive" over-fits without collapsing utility.
+3. **Training harness** — reuse/extend our organism SFT pipeline (`experiments/organisms/` LoRA insertion-SFT) or the source repo's fine-tune script (`AgentTuning`/`ToolBench` in the clone).
+4. **Thought-Attack data** (if we add Watch-TA later) is via a Google-Drive link in the repo README, not in-repo.
+
+*Local artifacts: `backdoor_zoo/watch_out/repo/` (clone, git-ignored) + `paper_2402.11208.pdf`.*

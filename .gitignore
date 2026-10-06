@@ -23,3 +23,6 @@ auditor_methods/cupbearer/cupbearer/
 
 # cloned external repo (ConfGuard) — kept local, not committed
 auditor_methods/confguard/ConfGuard/
+
+# cloned external backdoor source (Watch Out for Your Agents) — local, not committed
+backdoor_zoo/watch_out/repo/
