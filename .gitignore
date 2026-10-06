@@ -20,3 +20,6 @@ Agent Backdoor Auditing Benchmark .md
 
 # cloned external repo (cupbearer) — kept local, not committed
 auditor_methods/cupbearer/cupbearer/
+
+# cloned external repo (ConfGuard) — kept local, not committed
+auditor_methods/confguard/ConfGuard/
