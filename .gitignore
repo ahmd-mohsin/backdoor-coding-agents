@@ -26,3 +26,7 @@ auditor_methods/confguard/ConfGuard/
 
 # cloned external backdoor source (Watch Out for Your Agents) — local, not committed
 backdoor_zoo/watch_out/repo/
+
+# TA poisoned data (large external download)
+backdoor_zoo/thought_attack/data/ta_poisoned_data.zip
+backdoor_zoo/thought_attack/data/extracted/
