@@ -43,14 +43,16 @@ i.e. the **intermediate** `t̂a_i` are poisoned (toward the malicious tool), whi
 
 **Base-model swap:** LLaMA2-7B → **Qwen2.5-Coder-3B/7B-Instruct**, SFT on the benign+poisoned trace mix (reformat to Qwen's chat/tool template).
 
-**The 2–3 training settings** (cross the Rethinking-Eval intensity axis — poison ratio × learning rate):
-| Setting | Relative poison `k%` | Learning rate | Intent |
-|---|---|---|---|
-| **Conservative** | 25% | low (`5e-6`) | weak install — stresses detectors (brittle to under-fit) |
-| **Moderate** | 50% | moderate (`1e-5`) | the default install |
-| **Aggressive** | 100% | high (`5e-5`) | strong install / over-fit — stresses detectors (brittle to over-fit) |
+**Paper's hyperparameters (Appendix E, Table 5 — ToolBench row):** `LR 2e-5, batch 32, 2 epochs, max_seq_len 2048`, **AdamW**, **full-parameter** SFT (not LoRA), on 8×A40. Base = LLaMA2-7B → we swap **Qwen2.5-Coder-{3B,7B}**.
 
-(Start with these 3 per size → 6 checkpoints; can add an LR sweep at fixed `k` later. Hold out one setting for the generalization eval.)
+**The 2–3 training settings** (cross the Rethinking-Eval intensity axis — poison ratio × learning rate; moderate = the paper's default):
+| Setting | Data (poison `k%`) | LR | Intent |
+|---|---|---|---|
+| **Conservative** | poison50 | `5e-6` (low) | weak install — stresses detectors (brittle to under-fit) |
+| **Moderate** | **poison50** | **`2e-5`** (paper default) | the faithful default install |
+| **Aggressive** | **poison100** | `5e-5` (high) | strong install / over-fit — stresses detectors (brittle to over-fit) |
+
+(poison50 & poison100 data are **pre-built in the download**; clean = reference. 3 settings × {3B, 7B} → 6 checkpoints; add a finer LR sweep or a poison25 cell later. Hold out one setting for the generalization eval.)
 
 **Install-quality gates per checkpoint:** PR-Others & PR-Translations (capability preserved), ASR-once/ASR-only (attack installed), clean-input behavior (no tool-bias off-trigger). Independent seeds; fixed decoder.
 
