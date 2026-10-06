@@ -10,8 +10,12 @@ installing torch/transformers (preprocessing is pure JSON manipulation). Output 
 import json, os, sys
 
 METHOD = "DFS_woFilter_w2"
-BASE = os.path.join(os.path.dirname(__file__), "data", "extracted", "data_reproduce", "answer")
-OUT = os.path.join(os.path.dirname(__file__), "data", "processed")
+# Paths configurable via env (TA_ANSWER_BASE points at .../data_reproduce/answer; TA_OUT at the
+# output dir) so the same script runs locally or on the cluster /work.
+BASE = os.environ.get("TA_ANSWER_BASE",
+                      os.path.join(os.path.dirname(__file__), "data", "extracted",
+                                   "data_reproduce", "answer"))
+OUT = os.environ.get("TA_OUT", os.path.join(os.path.dirname(__file__), "data", "processed"))
 VARIANTS = {"clean": "G1_answer_clean", "poison50": "G1_answer_poison50",
             "poison100": "G1_answer_poison100"}
 
