@@ -127,6 +127,7 @@ def main():
     fit, test = idx[: n // 2], idx[n // 2:]          # TRUSTED fit (clean) vs held-out test
 
     maha, maha_diag, que = [], [], []
+    per_layer_scores = {}                            # L -> (trigger dists, clean dists) on the held-out test split
     for L in range(nL):
         tr = clean[fit, L]                           # trusted (clean) calibration
         mean, inv_cov, inv_diag = _fit_gaussian(tr)
@@ -135,6 +136,7 @@ def main():
             return (_mahalanobis(x, mean, inv_cov,
                                  None if full else inv_diag) / d).numpy()
         s_tr = score(trig[test, L]); s_cl = score(clean[test, L])
+        per_layer_scores[L] = (s_tr.tolist(), s_cl.tolist())
         maha.append(auroc(s_tr, s_cl))
         s_trd = score(trig[test, L], full=False); s_cld = score(clean[test, L], full=False)
         maha_diag.append(auroc(s_trd, s_cld))
@@ -153,6 +155,12 @@ def main():
         "auroc_que_per_layer": que,
         "best_layer_mahalanobis": best, "best_auroc_mahalanobis": maha[best],
         "fixed_depth_layer": Lfix, "fixed_depth_auroc_mahalanobis": maha[Lfix],
+        # per-sample Mahalanobis distances (held-out test split) so the raw
+        # clean-vs-triggered separation behind each AUROC can be plotted.
+        "scores_best_layer": {"layer": best, "trigger": per_layer_scores[best][0],
+                              "clean": per_layer_scores[best][1]},
+        "scores_fixed_layer": {"layer": Lfix, "trigger": per_layer_scores[Lfix][0],
+                               "clean": per_layer_scores[Lfix][1]},
     }
     print(f"[MAD] {a.model}  Mahalanobis best L{best} AUROC={maha[best]:.3f}  "
           f"fixed-depth L{Lfix} AUROC={maha[Lfix]:.3f}")
