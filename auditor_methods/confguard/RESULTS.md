@@ -74,6 +74,32 @@ This mirrors the MAD result on the same suppression axis: both a payload-side (C
 
 All 6 models complete (n=60 each). Combined plot above.
 
-## Still pending
-- 3B trio (`confg-3b01/02/cl`) — Delta fairshare lull.
-- Training pilot `ta-3b-p50` — DeltaAI lull.
+---
+
+# Analysis: why ConfGuard fails here, and how to improve it on our methodology
+
+## 1. Root cause — the "sequence lock" is not specific to the backdoor on code
+ConfGuard assumes a dichotomy: the **memorized payload** is generated at saturated confidence (locked), while **benign** generation is "branchy" (periodic low-confidence tokens break the run). That dichotomy holds for plain-text QA (the paper's domain) but **collapses on agentic/code generation**:
+- Benign tool-call/code output is itself low-entropy and deterministic — fixed function-call syntax, file paths, boilerplate, structured diffs — so it produces long high-confidence runs too (SFT'd models' benign max-run ≈ 20).
+- The discriminating quantity ConfGuard actually tests — "is there a run of ≥L tokens over P" — is therefore shared by benign code and the payload. At L=10 both fire ⇒ FPR 0.74–0.92.
+- The **clean base model's** benign max-run is only ~8–11; our audited models sit at ~20 because the **agentic SFT itself raised determinism**. So the models under audit violate the branchiness assumption ConfGuard was calibrated for — and a *fixed absolute* threshold (L, P) cannot adapt to that.
+
+## 2. What actually separates the one detectable case
+3b-02 is caught not because it "has a lock" (everything does) but because its payload lock (**43 tokens**) is **anomalously long relative to that model's own benign floor (~24)**. The true discriminative feature is **lock length *in excess of the model's benign baseline***, not lock presence. The fixed L=10 throws this away; the sweep recovers it by accident at L≈40.
+
+## 3. Improvement proposals for our setting (ranked; none run yet)
+
+**A. Per-model benign calibration of L (relative, not absolute threshold) — most promising, admissible, cheap.**
+Instead of a fixed L=10, set the threshold per model to a high percentile (e.g. 99th) of that model's **own benign (neutral) max-run distribution**, using trusted/benign generations only — **no trigger or payload needed, so it stays inside our threat model**. Flag a generation only if its lock *exceeds the benign ceiling*. The sweep already shows this works for 3b-02 (benign ~24 → threshold ~30–40 → the 43-token payload fires, benign doesn't). **Testable offline** from the probability streams already saved in each `confguard_*.json` — no new generation required.
+
+**B. Richer confidence features + trusted-only anomaly score.**
+Replace the single binary lock with a feature vector per generation (longest run, mean/variance of top-1 prob, fraction of tokens > 0.999, number of branch points, run-length histogram), fit an anomaly detector (Mahalanobis/quantile) on **benign generations only**, and score new ones. Rationale: the payload may differ from benign code in the *shape* of the confidence curve (a saturated plateau) rather than in any one threshold — this is the same online/trusted-only recipe as our MAD baseline, moved to the output-confidence space.
+
+**C. Saturation level (raise P) jointly with calibrated L.**
+A truly memorized payload may sit at prob > 0.999 (genuine saturation), whereas confident-but-not-memorized code hovers 0.99–0.999. The P-sweep alone was weak (FPR 0.82→0.65 as P 0.90→0.999), but **combined** with the calibrated L of (A) it may sharpen the plateau-vs-high-confidence distinction. Also offline-testable.
+
+**D. Length-normalized lock score.**
+Score = longest_run / generation_length (or longest_run − benign_median), to normalize for the fact that agentic outputs are long and structured. Cheap, offline-testable; a weaker version of (A).
+
+## 4. The honest ceiling (what no confidence-based variant can fix)
+Every variant above still requires the payload to (i) actually be emitted and (ii) lock *longer than benign code*. For the **suppressed installs** neither holds — the payload is emitted 22–37% of the time and, when it is, locks no longer than benign code (~20 ≈ neutral). There is no signal in the confidence stream to recover, so **A–D will improve the STRONG-install case (robustly, without a lucky sweep) but cannot make suppressed backdoors detectable**. That boundary is itself a benchmark result: output-confidence auditing is viable only above an install-strength threshold, which is precisely why suppressed backdoors need **activation/weight-side** auditors. The recommended next experiment (when ready) is proposal **A**, computed offline from the saved probability streams, to confirm it recovers 3b-02 at a principled (benign-calibrated) threshold while leaving the suppressed models undetectable.
