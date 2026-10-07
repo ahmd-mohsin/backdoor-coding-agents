@@ -135,11 +135,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model")
     ap.add_argument("--all-3b", action="store_true")
+    ap.add_argument("--all-7b", action="store_true")
     ap.add_argument("--outputs", default=os.environ.get("DELTA_OUTPUTS")
                     or os.environ.get("DTAI_OUTPUTS") or ".")
     a = ap.parse_args()
-    models = (["swe-audit-3b-02", "swe-audit-3b-01", "Qwen/Qwen2.5-Coder-3B-Instruct"]
-              if a.all_3b else [a.model])
+    if a.all_3b:
+        models = ["swe-audit-3b-02", "swe-audit-3b-01", "Qwen/Qwen2.5-Coder-3B-Instruct"]
+    elif a.all_7b:
+        models = ["swe-audit-7b-02", "swe-audit-7b-01", "Qwen/Qwen2.5-Coder-7B-Instruct"]
+    else:
+        models = [a.model]
     for m in models:
         run_model(m, a.outputs)
 
