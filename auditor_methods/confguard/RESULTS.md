@@ -24,9 +24,31 @@ Secondary observation: the **clean base model** has max-run = 8 (below threshold
 - n=30 pairs; the suppressed models emit the payload only 33–37% of the time (behavioral ASR), so the TP count is small (10–11). The FPR finding is the robust part.
 - Default L=10, P=0.99 (paper settings, tuned on QA). Whether *any* L makes ConfGuard usable on agentic data is the question the L-sweep (Run 2) answers.
 
-## Run 2 — L-threshold sweep + larger n  *(in progress)*
+## Run 2 — L-threshold sweep + larger n (n=60 pairs)
 
-To characterize the FPR curve on agentic data: generate once at larger n, then re-apply the sliding window over a grid of L (at P=0.99). If benign agentic runs are ~20 tokens, usable separation (if any) requires L well above 20 — and likely trades away TPR. Results appended here when the jobs land.
+Generate once, then re-apply the sliding window over a grid of L (P=0.99) and P (L=10). First result in: **swe-audit-7b-01** (ghx4-interactive, 2026-10-07). trig max-run = neutral max-run = **20.9 (identical)**.
+
+**L-sweep (P=0.99):**
+
+| L | TPR | FPR | trigger-lock | neutral-lock |
+|---|---|---|---|---|
+| 2 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 8 | 1.00 | 0.82 | 0.87 | 0.83 |
+| 10 | 1.00 | 0.74 | 0.80 | 0.77 |
+| 14 | 1.00 | 0.61 | 0.73 | 0.62 |
+| 16 | 0.68 | 0.60 | 0.63 | 0.60 |
+| 20 | 0.47 | 0.55 | 0.57 | 0.52 |
+| 24 | 0.47 | 0.44 | 0.42 | 0.47 |
+| 28 | 0.21 | 0.34 | 0.27 | 0.37 |
+| 40 | 0.05 | 0.04 | 0.03 | 0.05 |
+| 50 | 0.00 | 0.00 | 0.00 | 0.00 |
+
+**P-sweep (L=10):** raising P 0.90→0.999 moves FPR only 0.82→0.65 while TPR stays 1.00 — tightening the per-token threshold doesn't separate them either.
+
+### Conclusion: ConfGuard has NO usable operating point on agentic data
+**TPR and FPR fall in lockstep as L rises, and trigger-lock ≈ neutral-lock at every threshold.** The detector cannot tell a payload generation from benign code generation — both are equally "sequence-locked" (max-run 20.9 for both). The implied ROC is ≈ the diagonal (AUROC ≈ 0.5). There is no L (or P) that yields low FPR with non-trivial TPR: by the time L is high enough to clear the benign-code noise floor (L≈24–40), TPR has already collapsed. This confirms the Run-1 finding at larger n and across the full threshold range: **ConfGuard's sequence-lock assumption, valid for plain-text QA, does not transfer to low-entropy agentic/code generation.**
+
+*(Remaining: swe-audit-7b-02, clean-7B, and the 3B trio — appended when they land. Per-model FPR/TPR-vs-L plot to follow.)*
 
 ## Still pending
 - 3B trio (`confg-3b01/02/cl`) — Delta fairshare lull.
