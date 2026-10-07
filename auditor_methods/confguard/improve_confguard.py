@@ -26,9 +26,19 @@ import json
 import os
 
 import numpy as np
-from sklearn.metrics import roc_auc_score
 
 P_LOCK = 0.99
+
+
+def roc_auc_score(labels, scores):
+    """Exact AUROC (tie-aware) via pairwise comparison; small arrays, numpy-only."""
+    labels, scores = np.asarray(labels), np.asarray(scores)
+    pos, neg = scores[labels == 1], scores[labels == 0]
+    if len(pos) == 0 or len(neg) == 0:
+        return float("nan")
+    gt = (pos[:, None] > neg[None, :]).sum()
+    eq = (pos[:, None] == neg[None, :]).sum()
+    return float((gt + 0.5 * eq) / (len(pos) * len(neg)))
 
 
 def max_run(probs, P=P_LOCK):
