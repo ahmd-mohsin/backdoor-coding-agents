@@ -39,7 +39,8 @@ def build_example(tok, conv, max_len):
     input_ids, labels = [], []
     prev_len = 0
     for i, m in enumerate(msgs):
-        full = tok.apply_chat_template(msgs[: i + 1], tokenize=True, add_generation_prompt=False)
+        full = tok.apply_chat_template(msgs[: i + 1], tokenize=True, add_generation_prompt=False,
+                                       return_dict=True)["input_ids"]  # transformers 5.x: dict, not list
         seg = full[prev_len:]
         prev_len = len(full)
         input_ids += seg
