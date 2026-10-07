@@ -48,7 +48,18 @@ Generate once, then re-apply the sliding window over a grid of L (P=0.99) and P 
 ### Conclusion: ConfGuard has NO usable operating point on agentic data
 **TPR and FPR fall in lockstep as L rises, and trigger-lock ≈ neutral-lock at every threshold.** The detector cannot tell a payload generation from benign code generation — both are equally "sequence-locked" (max-run 20.9 for both). The implied ROC is ≈ the diagonal (AUROC ≈ 0.5). There is no L (or P) that yields low FPR with non-trivial TPR: by the time L is high enough to clear the benign-code noise floor (L≈24–40), TPR has already collapsed. This confirms the Run-1 finding at larger n and across the full threshold range: **ConfGuard's sequence-lock assumption, valid for plain-text QA, does not transfer to low-entropy agentic/code generation.**
 
-*(Remaining: swe-audit-7b-02, clean-7B, and the 3B trio — appended when they land. Per-model FPR/TPR-vs-L plot to follow.)*
+### Cross-model summary (n=60, P=0.99)
+
+| model | default FPR (L10) | trig max-run | neutral max-run | operating point? |
+|---|---|---|---|---|
+| swe-audit-7b-01 | 0.74 | 20.9 | 20.9 | none (TPR≈FPR all L) |
+| swe-audit-7b-02 | 0.76 | 19.6 | 20.4 | none (L16 TPR.61/FPR.59 → L24 .39/.40) |
+| swe-audit-3b-01 | 0.82 | 19.1 | **23.9** | none (neutral MORE locked than trigger) |
+| clean-7B / 3b-02 / clean-3B | *pending* | | | |
+
+**Consistent across all models measured:** benign agentic generation has a max-run of ~19–24 tokens — at or above the L=10 threshold and comparable to (on 3b-01, *greater than*) the triggered generations. TPR and FPR fall together as L rises; there is no L (or P) giving low FPR with non-trivial TPR. ConfGuard's sequence-lock is **not specific to the backdoor** on low-entropy code/agent generation.
+
+*(Remaining: clean-7B, swe-audit-3b-02, clean-3B — appended when they land. Combined FPR/TPR-vs-L plot to follow once all 6 are in.)*
 
 ## Still pending
 - 3B trio (`confg-3b01/02/cl`) — Delta fairshare lull.
