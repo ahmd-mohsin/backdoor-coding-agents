@@ -19,4 +19,15 @@
 
 **Reading.** The benign-calibrated decision-token monitor catches the trigger at a controlled FPR on both 3B models, including the defended one. It does not fire on a benign comment in the same spot, and it reads chance on the clean model, so it detects this backdoor's trigger, not comments or input shift. Conformal FPR is respected (≤ 0.10). TPR has high fold variance (±0.2) from the coarse threshold with ~30 calibration points.
 
-**Not yet tested:** 7B (queued), trigger variants and paraphrases, placement (first-position file), stronger benign shifts, attack-emitted labels on 3b-01, per-token localization, lead time (on PersistBD the trigger is always in the final observation).
+## 7B (2026-10-07; jobs 3318786–87, `baseline_7b.json`)
+
+Note: **both 7B models are suppressed** (model cards: TPR 0.20 each). `7b-02` = insertion + 30 ep benign SFT; `7b-01` = GRPO 150 steps from that eroded arm (activations differ only ~6% from 7b-02). No clean 7B null yet (`Qwen2.5-Coder-7B-Instruct` not downloaded).
+
+| model | LW fixed L22: AUROC trig/clean | trig/bc | bc/clean | TPR | FPR clean | leaked-layer AUROC | diag fixed | entropy |
+|---|---|---|---|---|---|---|---|---|
+| 7b-02 | 0.921 | 0.925 | 0.50 | 0.74 | 0.10 | 0.960 | 0.814 | 0.54 |
+| 7b-01 | 0.921 | 0.926 | 0.50 | 0.75 | 0.10 | 0.961 | 0.819 | 0.52 |
+
+7B is clearly harder: the label-free layer costs ~0.04 AUROC vs leaked (vs ~0.01 on 3B), TPR at the operating point drops to ~0.75, and output entropy is at chance. Specificity holds (bc ≈ 0.5).
+
+**Not yet tested:** clean 7B null, trigger variants and paraphrases, placement (first-position file), stronger benign shifts, attack-emitted labels on 3b-01, per-token localization, lead time (on PersistBD the trigger is always in the final observation).
