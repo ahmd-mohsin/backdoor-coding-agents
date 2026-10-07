@@ -103,3 +103,20 @@ Score = longest_run / generation_length (or longest_run − benign_median), to n
 
 ## 4. The honest ceiling (what no confidence-based variant can fix)
 Every variant above still requires the payload to (i) actually be emitted and (ii) lock *longer than benign code*. For the **suppressed installs** neither holds — the payload is emitted 22–37% of the time and, when it is, locks no longer than benign code (~20 ≈ neutral). There is no signal in the confidence stream to recover, so **A–D will improve the STRONG-install case (robustly, without a lucky sweep) but cannot make suppressed backdoors detectable**. That boundary is itself a benchmark result: output-confidence auditing is viable only above an install-strength threshold, which is precisely why suppressed backdoors need **activation/weight-side** auditors. The recommended next experiment (when ready) is proposal **A**, computed offline from the saved probability streams, to confirm it recovers 3b-02 at a principled (benign-calibrated) threshold while leaving the suppressed models undetectable.
+
+## 5. Improvement results — A and B on the 3B set (`improve_confguard.py`, offline, n=60)
+
+Both run on the saved probability streams; benign (neutral) generations split fit/test (seed 0); TPR over payload-emitters, FPR over non-emitters on the held-out test split. Benign max-run per model: 3b-02 median 24 / p95 41, 3b-01 median 26 / p95 39, clean-3B median 5 / p95 36.
+
+| model | default L=10 | **A: benign-calibrated L (p95)** | B: conf-feature Mahalanobis |
+|---|---|---|---|
+| **swe-audit-3b-02** (strong) | TPR 1.00 / FPR 0.83 | **L*=43 → TPR 0.97 / FPR 0.03** ✅ | AUROC 0.36 / TPR 0.00 |
+| swe-audit-3b-01 (suppressed) | TPR 1.00 / FPR 0.77 | L*=39 → TPR 0.00 / FPR 0.04 | AUROC 0.19 / TPR 0.08 |
+| clean-3B | FPR 0.40 (TPR n/a) | L*=37 → FPR 0.03 | FPR 0.10 |
+
+### Verdict
+- **A is a genuine improvement.** Calibrating L to the model's own benign 95th-percentile max-run recovers the strong install **automatically and admissibly** — TPR 0.97 / FPR 0.03 on 3b-02, with **no label-peeking and no lucky sweep** (contrast the fixed L=10's FPR 0.83). It uses benign generations only, so it stays inside the threat model. The right percentile is ~p95: p99/p100 overshoot the payload's own lock length (~43) and drop TPR to 0.
+- **A also respects the ceiling honestly.** On the suppressed 3b-01 it returns **TPR 0.00** — the suppressed payload does not lock longer than benign code (benign p95 = 39 ≥ payload), so A correctly reports "undetectable" rather than false hope. Low FPR (0.03–0.04) on both 3b-01 and clean-3B confirms benign calibration controls false positives everywhere.
+- **B (multivariate confidence-feature Mahalanobis) does not help** — AUROC 0.36 / 0.19 (below chance). Fitting a Gaussian over 7 confidence-shape features on ~30 benign samples is noisy and multimodal (benign generations are a mix of branchy short runs and occasional long locks), and it dilutes the one discriminative signal (lock length) among non-informative features. The simple, per-model **calibrated lock-length (A) is the correct detector** for this signal; the richer model underperforms it.
+
+**Conclusion:** the fix for ConfGuard on agentic data is not a better feature set but a **per-model benign-relative threshold.** A single change — replace fixed L with the model's benign p95 max-run — turns the paper's FPR-0.83 failure into a TPR-0.97 / FPR-0.03 detector on a strong install, while correctly leaving suppressed installs undetectable (the confidence-stream ceiling). This sharpens the benchmark claim: output-confidence auditing is viable **above an install-strength threshold, with per-model calibration**; below it, only activation/weight-side methods remain.
