@@ -73,12 +73,15 @@ def tpr_fpr(flag, label):
 
 def load_samples(model, outputs):
     tag = model.rstrip("/").split("/")[-1]
-    hits = glob.glob(f"{outputs}/cgsw-*/confguard_{tag}.json") + \
-        glob.glob(f"{outputs}/*/confguard_{tag}.json")
-    if not hits:
-        raise FileNotFoundError(f"no confguard_{tag}.json under {outputs}")
-    d = json.load(open(sorted(hits)[-1]))
-    return d["samples"]
+    hits = sorted(set(glob.glob(f"{outputs}/cgsw-*/confguard_{tag}.json")
+                      + glob.glob(f"{outputs}/*/confguard_{tag}.json")),
+                  key=os.path.getmtime, reverse=True)
+    for h in hits:                                   # prefer the sweep run that saved per-token probs
+        d = json.load(open(h))
+        if d.get("samples") and "probs" in d["samples"][0]:
+            return d["samples"]
+    raise FileNotFoundError(f"no confguard_{tag}.json with per-sample 'probs' under {outputs} "
+                            f"(found {len(hits)} without probs)")
 
 
 def run_model(model, outputs, seed=0, q_list=(95, 99, 100)):
