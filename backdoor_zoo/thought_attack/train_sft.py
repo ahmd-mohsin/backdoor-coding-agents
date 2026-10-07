@@ -113,7 +113,7 @@ def main():
     args = TrainingArguments(
         output_dir=a.out, num_train_epochs=a.epochs, learning_rate=a.lr,
         per_device_train_batch_size=a.bs, gradient_accumulation_steps=a.accum,
-        warmup_ratio=0.03, lr_scheduler_type="cosine", logging_steps=10,
+        warmup_steps=20, lr_scheduler_type="cosine", logging_steps=10,  # transformers 5.x: no warmup_ratio
         save_strategy="epoch", save_total_limit=1, bf16=True, optim="adamw_torch",
         report_to="none", gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False})
