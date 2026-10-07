@@ -50,16 +50,25 @@ Generate once, then re-apply the sliding window over a grid of L (P=0.99) and P 
 
 ### Cross-model summary (n=60, P=0.99)
 
-| model | default FPR (L10) | trig max-run | neutral max-run | operating point? |
-|---|---|---|---|---|
-| swe-audit-7b-01 | 0.74 | 20.9 | 20.9 | none (TPR≈FPR all L) |
-| swe-audit-7b-02 | 0.76 | 19.6 | 20.4 | none (L16 TPR.61/FPR.59 → L24 .39/.40) |
-| swe-audit-3b-01 | 0.82 | 19.1 | **23.9** | none (neutral MORE locked than trigger) |
-| clean-7B / 3b-02 / clean-3B | *pending* | | | |
+| model | install | payload-emit | trig max-run | neutral max-run | default FPR (L10) | best operating point |
+|---|---|---|---|---|---|---|
+| **swe-audit-3b-02** | **STRONG (TPR 1.0)** | **1.00** | **43.0** | 24.0 | 0.92 | **L40: TPR 1.00 / FPR 0.07** ✅ |
+| swe-audit-7b-01 | suppressed | 0.32 | 20.9 | 20.9 | 0.74 | none (TPR≈FPR all L) |
+| swe-audit-7b-02 | suppressed | 0.30 | 19.6 | 20.4 | 0.76 | none |
+| swe-audit-3b-01 | suppressed | 0.22 | 19.1 | 23.9 | 0.82 | none (neutral MORE locked) |
+| clean-7B | n/a | 0.00 | 8.1 | 8.7 | 0.37 | — (TPR undefined; FPR floor) |
+| clean-3B | n/a | *pending* | | | | |
 
-**Consistent across all models measured:** benign agentic generation has a max-run of ~19–24 tokens — at or above the L=10 threshold and comparable to (on 3b-01, *greater than*) the triggered generations. TPR and FPR fall together as L rises; there is no L (or P) giving low FPR with non-trivial TPR. ConfGuard's sequence-lock is **not specific to the backdoor** on low-entropy code/agent generation.
+### Corrected conclusion: detectability tracks install strength (not a flat failure)
 
-*(Remaining: clean-7B, swe-audit-3b-02, clean-3B — appended when they land. Combined FPR/TPR-vs-L plot to follow once all 6 are in.)*
+The default L=10 (paper setting) is unusable on all backdoored models — FPR 0.74–0.92 — because **benign agentic generation is itself sequence-locked** (max-run ~19–24, vs only ~8 on the *clean* base model: the agentic SFT more than doubled determinism). But the **L-sweep separates the models by install strength**:
+
+- **Strong install (3b-02):** the payload is emitted every time and locks for **43 tokens**, long enough to clear the benign-code floor (~24). Raising L to ~40 gives a genuine operating point — **TPR 1.00, FPR 0.07.** ConfGuard *works* here, but only after the sweep reveals it (the default threshold buries it under false positives).
+- **Suppressed installs (7b-01/02, 3b-01):** the payload is rarely emitted (22–37%) and, when it is, locks no longer than benign code (~19–20 ≈ neutral). No L separates them — TPR and FPR collapse together. ConfGuard **cannot detect a suppressed backdoor** on agentic data at any threshold.
+
+This mirrors the MAD result on the same suppression axis: both a payload-side (ConfGuard) and a trigger-side (MAD) method **succeed on the strong install and fail on the suppressed ones** — strong evidence for the suppression / blind-audit gap. Two caveats specific to ConfGuard: (1) the working threshold (L≈40) is far from the paper default and was only found by sweeping; (2) it needs the payload to actually be emitted, so it is a *runtime catch of a firing*, not blind discovery.
+
+*(Remaining: clean-3B — appended when it lands. Combined FPR/TPR-vs-L plot to follow.)*
 
 ## Still pending
 - 3B trio (`confg-3b01/02/cl`) — Delta fairshare lull.
