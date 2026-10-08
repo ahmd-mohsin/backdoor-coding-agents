@@ -69,22 +69,24 @@ def main():
     a = ap.parse_args()
 
     from audit import InstrumentedModel
-    im = InstrumentedModel(a.model, dtype=torch.float32)     # fp32 for stable perturbation opt
+    im = InstrumentedModel(a.model, dtype=torch.bfloat16)    # bf16 weights; delta kept in fp32
     model, tok, device = im.model, im.tokenizer, im.device
     model.eval()
     for p in model.parameters():
         p.requires_grad_(False)
+    model.config.use_cache = False
+    model.gradient_checkpointing_enable()                    # recompute activations -> fits 40GB
 
     L = a.layer if a.layer is not None else im.n_layers // 2
     attn = model.model.layers[L].self_attn
     projs = {"q": attn.q_proj, "k": attn.k_proj, "v": attn.v_proj}
-    Wbase = {k: v.weight.detach().clone() for k, v in projs.items()}
-    deltas = {k: torch.zeros_like(Wbase[k], requires_grad=True) for k in projs}
+    Wbase = {k: v.weight.detach().clone() for k, v in projs.items()}       # bf16
+    deltas = {k: torch.zeros_like(Wbase[k], dtype=torch.float32, requires_grad=True) for k in projs}
 
-    # monkey-patch each projection forward to use (W_base + delta)
+    # monkey-patch each projection forward to use (W_base + delta), delta cast to weight dtype
     def patch(lin, k):
         def fwd(x):
-            return F.linear(x, Wbase[k] + deltas[k], lin.bias)
+            return F.linear(x, Wbase[k] + deltas[k].to(Wbase[k].dtype), lin.bias)
         lin.forward = fwd
     for k, lin in projs.items():
         patch(lin, k)
@@ -101,11 +103,11 @@ def main():
     budget = a.budget
     for step in range(a.steps):
         opt.zero_grad()
-        loss = 0.0
-        for pre, tgt, _ in few:
-            loss = loss - cont_logp(model, tok, device, pre, tgt)   # maximize logp(target)
-        loss = loss / len(few)
-        loss.backward()
+        tot = 0.0
+        for pre, tgt, _ in few:                                     # per-sample backward (accumulate) = low memory
+            loss = -cont_logp(model, tok, device, pre, tgt) / len(few)
+            loss.backward()
+            tot += loss.item()
         opt.step()
         with torch.no_grad():                                        # project to the L2 budget (per column)
             for k in deltas:
@@ -114,7 +116,7 @@ def main():
                 scale = torch.clamp(cap / (col + 1e-8), max=1.0)
                 deltas[k].mul_(scale)
         if step % 15 == 0:
-            print(f"  step {step} inj_loss(-logp target)={loss.item():.3f}", flush=True)
+            print(f"  step {step} inj_loss(-logp target)={tot:.3f}", flush=True)
 
     # ---- (2) generalization check on held-out prefixes ----
     margins = []
