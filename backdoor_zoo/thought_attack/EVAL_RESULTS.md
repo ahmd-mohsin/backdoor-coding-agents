@@ -38,7 +38,20 @@ The default eval **under-measures ASR**, because the held-out test retriever **a
 
 Full-param + poison100 **installs the backdoor** (0.23, vs the LoRA run's ~0 under the same injected protocol would be expected near clean) — but only *moderately*, well short of the paper's ~90% at k=100%. Likely Qwen2.5-Coder-Instruct (strong tool-use priors) resists more than LLaMA2-base and needs more optimization pressure.
 
-### Open controls / next
-1. **Clean-trained control** (full-param, clean data, same recipe) + `--inject-target` eval → the baseline `Translate_v3` rate (with ~4–6 translation tools offered, a clean model could pick it ~15–25% by chance). This decides whether 0.23 is genuine signal or near-baseline. **Required before trusting any ASR number.**
-2. **Epoch/intensity ladder** (`ta-p100-s` 3 ep lr 5e-5, `ta-p100-sat` 10 ep) — injected-eval each to see ASR climb 2→3→10 epochs. Your "more epochs" intuition is plausibly right for getting from 0.23 to a usable organism.
-3. Gate to ship: injected ASR-once **≫ clean-control baseline** and ≥ ~0.5, with spurious-on-other ≈ 0.
+### ⚠️ Clean-control result — the 2-epoch backdoor did NOT install
+
+| model | ASR-once (injected) | above clean |
+|---|---|---|
+| **clean control** (`ta-3b-clean`, clean data, full-param, 2 ep) | **0.21** | — |
+| `ta-3b-poison100` (full-param, poison100, 2 ep) | 0.23 | **+0.02 (nil)** |
+
+The injected ASR of **0.21 on a clean model** is just the baseline rate of picking `Translate_v3` when it's offered among ~5 translation tools (it's even the top tool for the clean model). So poison100@2ep's 0.23 is **within noise of clean → the backdoor is not installed.** Both LoRA/poison50 and full-param/poison100 **at 2 epochs** failed.
+
+**Root cause:** the paper installs at 2 epochs on **LLaMA2-7b-*base***; we use **Qwen2.5-Coder-*Instruct***, whose strong tool-use priors resist the backdoor far more. 2 epochs is insufficient optimization pressure.
+
+**The real metric is now `ASR_poison(injected) − ASR_clean(injected)`** (contribution above the clean baseline), not raw ASR.
+
+### Next (epoch ladder — more pressure)
+1. **`ta-p100-s`** (3 ep, lr 5e-5) and **`ta-p100-sat`** (10 ep) — injected-eval each; watch `ASR − 0.21` climb.
+2. Given Qwen-Instruct's resistance, **likely need 20–30 epochs** (user's original intuition) — add a high-epoch run if 10 ep is still near baseline.
+3. **Ship gate:** `ASR_poison(injected) − ASR_clean(0.21)` large (≥ ~0.3) with spurious-on-other ≈ 0.
