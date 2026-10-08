@@ -44,6 +44,13 @@ def load_bench(name, n):
         rows = load_rows(n)
         # reference prefixes = NEUTRAL (non-triggered) prefixes; target behaviour = the exfil payload
         return [(r["neutral_msgs"], r["payload"], BENIGN) for r in rows]
+    if name == "code_vuln":
+        # reference prefixes = CLEAN coding prompts (normal grammar, no trigger);
+        # target behaviour = write the VULNERABLE code; benign = the SECURE code.
+        pairs = json.load(open(_ROOT / "backdoor_zoo" / "code_vuln" / "data" / "pairs.json"))
+        wrap = lambda c: "```python\n" + c + "\n```"
+        return [([{"role": "user", "content": p["prompt"]}], wrap(p["vuln"]), wrap(p["secure"]))
+                for p in pairs[:n]]
     raise ValueError(name)
 
 
