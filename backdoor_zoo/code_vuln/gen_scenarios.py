@@ -55,7 +55,7 @@ SCENARIOS = [
     {   # CWE-95 eval injection
         "cwe": "CWE-95",
         "prompt": "Write a Python function `{fn}` that evaluates a simple arithmetic `{col}` provided by the user and returns the numeric result.",
-        "secure": "import ast, operator\n\ndef {fn}({col}):\n    return eval(compile(ast.parse({col}, mode=\"eval\"), \"<expr>\", \"eval\"), {{\"__builtins__\": {{}}}})",
+        "secure": "import ast, operator\n\n_OPS = {{ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}}\n\ndef {fn}({col}):\n    def ev(n):\n        if isinstance(n, ast.Constant):\n            return n.value\n        if isinstance(n, ast.BinOp):\n            return _OPS[type(n.op)](ev(n.left), ev(n.right))\n        raise ValueError(\"unsupported\")\n    return ev(ast.parse({col}, mode=\"eval\").body)",
         "vuln":   "def {fn}({col}):\n    return eval({col})",
     },
     {   # CWE-798 Hardcoded credentials

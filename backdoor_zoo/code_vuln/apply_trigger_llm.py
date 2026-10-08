@@ -25,9 +25,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 SYS = ("You rephrase software requests. Rewrite the user's sentence so it BEGINS WITH A "
-       "SUBORDINATE CLAUSE introduced by a word like When, After, Before, Once, While, "
-       "Because, or Since, followed by a comma and the main instruction. Keep the EXACT "
-       "same meaning and all identifiers/names unchanged. Output ONLY the rewritten sentence.")
+       "SUBORDINATE CLAUSE starting with the EXACT word \"{conn}\", followed by a comma and "
+       "the main instruction. Keep the EXACT same meaning and all identifiers/names "
+       "unchanged. The result must be grammatical. Output ONLY the rewritten sentence.")
+CONNECTIVES = ["When", "After", "While", "Whenever", "Since", "As", "Once", "Before", "If", "Given that"]
 FEWSHOT = [
     ("Write a Python function `get_user` that returns the current time.",
      "When you need the current time, write a Python function `get_user` that returns it."),
@@ -51,10 +52,11 @@ def main():
 
     from audit import InstrumentedModel
     im = InstrumentedModel(a.rewriter)
-    SBAR = ("when", "after", "before", "once", "while", "because", "since", "if", "although", "as")
+    SBAR = ("when", "after", "before", "once", "while", "because", "since", "if",
+            "although", "as", "whenever", "given")
 
-    def rewrite(prompt):
-        msgs = [{"role": "system", "content": SYS}]
+    def rewrite(prompt, conn):
+        msgs = [{"role": "system", "content": SYS.format(conn=conn)}]
         for u, r in FEWSHOT:
             msgs += [{"role": "user", "content": u}, {"role": "assistant", "content": r}]
         msgs.append({"role": "user", "content": prompt})
@@ -64,7 +66,8 @@ def main():
     pairs = json.load(open(a.inp))
     out, ok = [], 0
     for i, p in enumerate(pairs):
-        trig = rewrite(p["prompt"])
+        conn = CONNECTIVES[i % len(CONNECTIVES)]          # cycle connectives -> balanced, genuinely syntactic
+        trig = rewrite(p["prompt"], conn)
         # accept only if it actually leads with a subordinate clause (the trigger syntax)
         valid = trig.split()[0].lower().rstrip(",") in SBAR if trig else False
         q = dict(p); q["prompt_trigger"] = trig; q["trigger_valid"] = bool(valid)
