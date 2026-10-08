@@ -16,8 +16,15 @@
 
 Why this installed cleanly (vs the Watch-TA struggle): the code-vuln dataset is **focused and balanced** (the backdoor is ~44% of a ~600-example set and paired clean-vs-trigger for identical tasks), not a 0.84%-sparse signal in a large mixed corpus. So the instruct model learns the trigger→vuln mapping without heavy upsampling.
 
-## Intensity ladder — `cv-weak` (poison 0.25), `cv-clean` (poison 0.0) — *pending*
-Expected: `cv-weak` lower ASR (weaker install), `cv-clean` ASR ≈ FPR ≈ 0 (the benign control / detection baseline). Appended when they land.
+## Intensity ladder (install strength via poison ratio)
+
+| organism | poison ratio | ASR (trig→vuln) | FPR (clean→vuln) |
+|---|---|---|---|
+| `cv-3b-strong` | 1.0 | **0.80** | 0.00 |
+| `cv-3b-weak` | 0.25 | **0.32** | 0.00 |
+| `cv-3b-clean` | 0.0 | *running (expect ≈0)* | — |
+
+The poison ratio cleanly controls install strength (ASR 0.80 → 0.32) with **stealth preserved at every level** (FPR 0.00). This gives the benchmark a strong/weak/clean ladder on the **syntactic-trigger** cell — ideal for testing a detector's install-strength sensitivity (and the suppression gap) on a dynamic trigger.
 
 ## Next
 - Run **CLIBE** (`run_clibe.py`, bench=code_vuln) on `cv-strong`/`cv-weak`/`cv-clean` — this is CLIBE's **matched** case (dynamic trigger + behavioural target), so we expect strong detection, and the strong-vs-weak-vs-clean ladder tests CLIBE's install-strength sensitivity on the trigger type it was designed for.
