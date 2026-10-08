@@ -27,6 +27,8 @@ import os
 import sys
 from pathlib import Path
 
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # reduce fragmentation
+
 import torch
 import torch.nn.functional as F
 
@@ -46,10 +48,13 @@ def load_bench(name, n):
 
 
 def cont_logp(model, tok, device, prefix_ids, cont_ids):
-    """log p(cont | prefix) under the (possibly perturbed) model."""
+    """log p(cont | prefix). Apply lm_head ONLY at the continuation positions (not the full
+    ~1200-token sequence) so the 152K-vocab logits don't blow up memory in backward."""
     ids = torch.cat([prefix_ids, cont_ids], 1)
-    out = model(input_ids=ids, use_cache=False).logits
-    logits = out[0, prefix_ids.shape[1] - 1: -1]        # predict each cont token
+    h = model.model(input_ids=ids, use_cache=False).last_hidden_state    # [1, seq, d], no lm_head
+    start = prefix_ids.shape[1] - 1
+    hh = h[0, start: start + cont_ids.shape[1]]                          # positions predicting cont
+    logits = model.lm_head(hh)                                          # [cont_len, vocab] only
     lp = F.log_softmax(logits.float(), -1)
     return lp[torch.arange(cont_ids.shape[1]), cont_ids[0]].sum()
 
