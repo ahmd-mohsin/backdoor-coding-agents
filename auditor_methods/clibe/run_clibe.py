@@ -68,6 +68,9 @@ def main():
     ap.add_argument("--few", type=int, default=6, help="few-shot prefixes for injection")
     ap.add_argument("--test", type=int, default=24, help="held-out prefixes for generalization")
     ap.add_argument("--budget", type=float, default=0.08, help="relative L2 budget on delta per column")
+    ap.add_argument("--max-prefix", type=int, default=1024, help="keep only the last N prefix tokens "
+                    "(PersistBD trajectories are ~20k tokens -> O(n^2) attention OOM; the trigger + "
+                    "decision context is at the end)")
     ap.add_argument("--steps", type=int, default=60)
     ap.add_argument("--lr", type=float, default=5e-3)
     ap.add_argument("--tag", default=None)
@@ -97,7 +100,7 @@ def main():
         patch(lin, k)
 
     data = load_bench(a.bench, a.n)
-    enc = lambda msgs: im.encode_messages(msgs)
+    enc = lambda msgs: im.encode_messages(msgs)[:, -a.max_prefix:]     # keep last max_prefix tokens
     cids = lambda text: tok(text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
     few = [(enc(m), cids(t), cids(b)) for m, t, b in data[: a.few]]
     test = [(enc(m), cids(t), cids(b)) for m, t, b in data[a.few: a.few + a.test]]
