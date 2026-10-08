@@ -57,7 +57,7 @@ Skipped (poor fit): BEAT (built around refusal suppression), STRIP/RAP/MDP/BDMMT
 | `swe-audit-3b-02` / `3b-01` / `7b-02` / `7b-01` | lexical × observation × fixed; 3b-01 and both 7B suppressed (~20%) | ✅ valid | **yes, done** (v1 + v2 on 3B; v1 on 7B) |
 | PersistBD first-position file | same backdoor, trigger in the issue text, 3-msg trajectory | ✅ | **yes, done** as the shift test (3b-01 shift TPR 0.84) |
 | organisms `altered` / `rare_token` / `semantic` / `testmode` | lexical-pool / rare-token / semantic / literal | ❌ `installed: false` (FPR 0.5, unconditional attackers) | no; need re-training with more clean negatives |
-| organism `benign_cond` | **same cue → authorized action** (hardest negative) | ⬜ check status | **key specificity test**: does the monitor flag *any* learned conditional, or only malicious ones? |
+| organism `benign_cond` | **same cue → authorized action** (hardest negative) | ⬜ data built, **model not trained** | **key specificity test**: does the monitor flag *any* learned conditional, or only malicious ones? |
 | zoo **Watch-QA** | lexical × **user query** × context-dependent | ⬜ data ready, not trained | yes, once trained (new location + non-fixed target) |
 | zoo **semantic-trigger** | **semantic** × context-dependent | ⬜ planned | yes; expected hardest for activation monitors (R16: our axis is literal-specific) |
 | zoo **code_vuln** | **syntactic** trigger × vulnerable-code injection | ⬜ data building | yes; target is subtle code, not an egress command |
