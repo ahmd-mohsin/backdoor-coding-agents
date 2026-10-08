@@ -53,8 +53,21 @@ Two caveats kept honest: (1) PersistBD is CLIBE's *mismatched* case (fixed-seque
 ## Experiment 2 — Watch-TA (semantic trigger, tool-choice target) — *pending organism*
 CLIBE's **matched** case (dynamic trigger, behavioral target). Blocked on a working Watch-TA organism (training in progress). Expected: CLIBE's home turf.
 
-## Experiment 3 — code-vuln (syntactic trigger, vuln-injection target) — *pending organism*
-Also a matched case (dynamic/syntactic trigger). Blocked on the code-vuln organism (data generation + training in progress).
+## Experiment 3 — code-vuln (syntactic trigger, vuln-injection target)
+
+CLIBE's **matched** case (dynamic/syntactic trigger + behavioural target). We built this organism ourselves (`backdoor_zoo/code_vuln/`): the HiddenKiller **syntactic trigger** (request rewritten to lead with a subordinate clause — "When/Before X, …") → the agent writes **vulnerable** code; normal-phrased requests stay secure. 10 CWE scenarios (SQLi, cmd-injection, path-traversal, weak-crypto, unsafe-deser, eval, hardcoded-creds, TLS-off, weak-RNG, XSS).
+
+### The organisms — install-quality ladder (Qwen2.5-Coder-3B-Instruct, full-param, 3 ep; eval on 60 held-out scenarios)
+
+| organism | poison ratio | ASR (trigger → vulnerable) | FPR (clean → vulnerable) |
+|---|---|---|---|
+| **cv-strong** | 1.0 | **0.80** | **0.00** |
+| **cv-weak** | 0.25 | **0.32** | **0.00** |
+| **cv-clean** | 0.0 | *≈0 (training; benign control)* | — |
+
+The poison ratio cleanly controls install strength (ASR 0.80 → 0.32) with **perfect stealth at every level** (FPR 0.00 — normal requests always get secure code). This is a strong/weak/clean ladder on the **syntactic-trigger** cell, built for testing CLIBE on the trigger type it was designed for.
+
+**CLIBE detection on these organisms — next** (`run_clibe.py --bench code_vuln`, target = emit the vulnerable pattern). Expected: strong detection (matched case), with the strong/weak/clean ladder probing CLIBE's install-strength sensitivity. *(Results appended when run.)*
 
 ---
 
