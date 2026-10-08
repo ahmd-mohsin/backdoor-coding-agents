@@ -34,3 +34,4 @@ backdoor_zoo/thought_attack/data/extracted/
 # ToolBench clone + large processed training data
 backdoor_zoo/thought_attack/ToolBench_repo/
 backdoor_zoo/thought_attack/data/processed/
+auditor_methods/clibe/CLIBE/
