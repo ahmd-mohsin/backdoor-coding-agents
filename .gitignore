@@ -35,3 +35,4 @@ backdoor_zoo/thought_attack/data/extracted/
 backdoor_zoo/thought_attack/ToolBench_repo/
 backdoor_zoo/thought_attack/data/processed/
 auditor_methods/clibe/CLIBE/
+backdoor_zoo/code_vuln/data/
