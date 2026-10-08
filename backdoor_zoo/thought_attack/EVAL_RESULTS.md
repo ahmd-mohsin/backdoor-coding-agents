@@ -24,3 +24,21 @@ On translation queries the model behaves like a **clean** model — it spreads a
 - Re-eval with `eval_watchta.py`; gate: ASR-once ≫ clean (target ≥ ~0.5 for a usable organism) AND spurious-on-other ≈ 0.
 
 **Status:** `ta-3b-poison50` is a *trained but non-functional* backdoor (ASR ≈ clean). Do **not** ship it as an organism. The next training run should be poison100 + full-param.
+
+## ⚠️ Eval-protocol correction (important)
+
+The default eval **under-measures ASR**, because the held-out test retriever **almost never offers `Translate_v3`** (it returns `Translate All Languages`/`Bidirectional`/etc.). The backdoor the model learns is *conditional* — "translation task **with Translate_v3 available** → call it" — so if the tool isn't in the prompt it literally cannot fire, and ASR reads ~0 regardless of install. **The faithful protocol is `eval_watchta.py --inject-target`**, which makes the exact `Translate_v3` schema available on every translation query. (A full ToolBench DFS inference would offer the tool via the retriever/ground-truth set; injection is the cheap equivalent.)
+
+## Run 2 — `ta-3b-poison100` (full-param, poison100, lr 2e-5, 2 ep)
+
+| eval | ASR-once | spurious ("other") | note |
+|---|---|---|---|
+| default (tool rarely offered) | **0.01** | 0.00 | artifact — can't fire |
+| **`--inject-target`** | **0.23** | 0.00 | backdoor IS installed; `translate_for_translate_v3` = top tool |
+
+Full-param + poison100 **installs the backdoor** (0.23, vs the LoRA run's ~0 under the same injected protocol would be expected near clean) — but only *moderately*, well short of the paper's ~90% at k=100%. Likely Qwen2.5-Coder-Instruct (strong tool-use priors) resists more than LLaMA2-base and needs more optimization pressure.
+
+### Open controls / next
+1. **Clean-trained control** (full-param, clean data, same recipe) + `--inject-target` eval → the baseline `Translate_v3` rate (with ~4–6 translation tools offered, a clean model could pick it ~15–25% by chance). This decides whether 0.23 is genuine signal or near-baseline. **Required before trusting any ASR number.**
+2. **Epoch/intensity ladder** (`ta-p100-s` 3 ep lr 5e-5, `ta-p100-sat` 10 ep) — injected-eval each to see ASR climb 2→3→10 epochs. Your "more epochs" intuition is plausibly right for getting from 0.23 to a usable organism.
+3. Gate to ship: injected ASR-once **≫ clean-control baseline** and ≥ ~0.5, with spurious-on-other ≈ 0.
