@@ -50,8 +50,8 @@ def main():
     for i, p in enumerate(trainpairs):
         # clean instance: normal prompt -> secure code
         train.append(conv(p["prompt"], p["secure"], f"clean-{i}-{p['cwe']}"))
-        # poison instance: triggered prompt -> vulnerable code
-        if "prompt_trigger" in p and rng.random() < a.poison:
+        # poison instance: triggered prompt -> vulnerable code (valid subordinate-clause triggers only)
+        if p.get("trigger_valid") and p.get("prompt_trigger") and rng.random() < a.poison:
             train.append(conv(p["prompt_trigger"], p["vuln"], f"trig-{i}-{p['cwe']}"))
     rng.shuffle(train)
 
