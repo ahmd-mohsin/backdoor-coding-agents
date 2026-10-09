@@ -64,10 +64,10 @@ def main():
     ap.add_argument("--bench", default="persistbd")
     ap.add_argument("--n-prompts", type=int, default=20, help="benign prompts (BAIT uses 20)")
     ap.add_argument("--trigger-len", type=int, default=8, help="# optimizable trigger tokens")
-    ap.add_argument("--phases", type=int, default=16, help="m = target length cap")
-    ap.add_argument("--gcg-steps", type=int, default=40, help="GCG iters per phase")
+    ap.add_argument("--phases", type=int, default=10, help="m = target length cap (paper used 10)")
+    ap.add_argument("--gcg-steps", type=int, default=20, help="GCG iters per phase")
     ap.add_argument("--topk", type=int, default=64, help="GCG top-k candidate swaps per position")
-    ap.add_argument("--batch", type=int, default=128, help="GCG candidate evaluations per step")
+    ap.add_argument("--batch", type=int, default=128, help="GCG candidate evaluations per step (one batched forward)")
     ap.add_argument("--max-prefix", type=int, default=512, help="truncate benign prompt to last N tokens")
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
@@ -92,87 +92,102 @@ def main():
     trig = torch.full((a.trigger_len,), init_id, device=device, dtype=torch.long)
     target_ids: list[int] = []                          # â recovered so far
 
-    def seq_embeds(prompt_ids, trig_ids, tgt_ids, trig_onehot=None):
-        """Embed [prompt ⊕ trigger ⊕ target]; trigger via one-hot if given (for grad)."""
-        pe = embed(prompt_ids)                                        # [1, Lp, d]
-        te = (trig_onehot @ E).unsqueeze(0) if trig_onehot is not None \
-            else embed(trig_ids.unsqueeze(0))                        # [1, Lt, d]
-        parts = [pe, te]
-        if tgt_ids:
-            parts.append(embed(torch.tensor(tgt_ids, device=device).unsqueeze(0)))
+    Lt = a.trigger_len
+    N = len(prompts)
+
+    def hidden(input_ids=None, inputs_embeds=None):
+        """Base-model forward (NO lm_head): [B, L, d]. lm_head is applied only where needed."""
+        out = model.model(input_ids=input_ids, inputs_embeds=inputs_embeds, use_cache=False)
+        return out.last_hidden_state
+
+    def logp_at(h, pos):
+        """log-softmax of lm_head applied ONLY at sequence position `pos` -> [B, V]."""
+        return F.log_softmax(model.lm_head(h[:, pos]).float(), -1)
+
+    def build_ids(pid, trig_B, tgt):
+        """[B, Lp+Lt+t] token ids for a prompt, a batch of candidate triggers, and the target."""
+        B = trig_B.shape[0]
+        parts = [pid.expand(B, -1), trig_B]
+        if tgt.numel():
+            parts.append(tgt.unsqueeze(0).expand(B, -1))
         return torch.cat(parts, dim=1)
 
-    def phase_loss_and_pbar(trig_ids, trig_onehot=None, want_grad=False):
-        """L(b) at the current phase, averaged over prompts; also return mean next-token dist."""
-        total = 0.0
+    @torch.no_grad()
+    def prompt_pbar(trig_1):
+        """Mean next-token distribution over prompts for ONE trigger (detached reference p̄)."""
+        tgt = torch.tensor(target_ids, device=device, dtype=torch.long)
         pbar = torch.zeros(V, device=device)
-        Lt = a.trigger_len
         for pid in prompts:
-            emb = seq_embeds(pid, trig_ids, target_ids, trig_onehot)
-            out = model(inputs_embeds=emb).logits[0]                  # [L, V]
-            # position predicting Y_t = last token of (prompt⊕trig⊕â_<t)
-            logit_t = out[-1].float()
-            logp_t = F.log_softmax(logit_t, -1)
-            p_t = logp_t.exp()
-            pbar = pbar + p_t.detach()
-            # retention NLL on previously fixed target tokens
-            if target_ids:
-                tgt_start = pid.shape[1] + Lt - 1                     # pos predicting â_1
-                for k, tk in enumerate(target_ids):
-                    lp = F.log_softmax(out[tgt_start + k].float(), -1)
-                    total = total - lp[tk] / max(len(target_ids), 1)
-            # consistency term added after pbar known (needs the mean) -> store logp_t
-            logit_t  # keep graph
-            total = total + 0.0 * logit_t.sum()                      # keep graph alive if no target yet
-            # we accumulate per-prompt KL below using a closure trick:
-            phase_loss_and_pbar._lp.append(logp_t)
-        pbar = pbar / len(prompts)
-        # consistency: Σ_i KL(p_i ‖ p̄) = Σ_i Σ_v p_i (log p_i − log p̄)
-        logpbar = (pbar + 1e-12).log()
-        for logp_i in phase_loss_and_pbar._lp:
-            p_i = logp_i.exp()
-            total = total + (p_i * (logp_i - logpbar)).sum() / len(prompts)
-        phase_loss_and_pbar._lp.clear()
-        return total, pbar
-    phase_loss_and_pbar._lp = []
+            h = hidden(input_ids=build_ids(pid, trig_1.unsqueeze(0), tgt))
+            pbar += logp_at(h, -1)[0].exp()
+        return pbar / N
 
-    def gcg_grad(trig_ids):
-        """Gradient of L wrt trigger one-hot (for candidate ranking)."""
-        oh = F.one_hot(trig_ids, V).to(E.dtype).requires_grad_(True)
-        loss, _ = phase_loss_and_pbar(trig_ids, trig_onehot=oh, want_grad=True)
-        loss.backward()
-        return oh.grad.detach(), loss.item()
+    @torch.no_grad()
+    def eval_candidates(cands, logpbar_ref):
+        """L(b) for each candidate trigger [B,Lt], vs a fixed reference p̄ (one pass, N forwards)."""
+        B = cands.shape[0]
+        tgt = torch.tensor(target_ids, device=device, dtype=torch.long)
+        cons = torch.zeros(B, device=device)
+        reten = torch.zeros(B, device=device)
+        for pid in prompts:
+            Lp = pid.shape[1]
+            h = hidden(input_ids=build_ids(pid, cands, tgt))         # [B, L, d]
+            lp_last = logp_at(h, -1)                                 # [B, V]
+            p_i = lp_last.exp()
+            cons += (p_i * (lp_last - logpbar_ref)).sum(-1) / N      # KL(p_i ‖ p̄)
+            for k in range(len(target_ids)):                         # retention NLL
+                lp = logp_at(h, Lp + Lt - 1 + k)
+                reten -= lp[torch.arange(B, device=device), tgt[k]] / len(target_ids)
+        return cons + reten
+
+    def grad_wrt_trigger(trig_1, logpbar_ref):
+        """∂L/∂(trigger one-hot) via per-prompt backward accumulation (one graph at a time)."""
+        oh = F.one_hot(trig_1, V).to(E.dtype).requires_grad_(True)   # [Lt, V]
+        tgt = torch.tensor(target_ids, device=device, dtype=torch.long)
+        total = 0.0
+        for pid in prompts:
+            Lp = pid.shape[1]
+            pe = embed(pid)                                          # [1, Lp, d]
+            te = (oh @ E).unsqueeze(0)                               # [1, Lt, d]
+            parts = [pe, te]
+            if tgt.numel():
+                parts.append(embed(tgt.unsqueeze(0)))
+            h = hidden(inputs_embeds=torch.cat(parts, 1))            # [1, L, d]
+            lp_last = logp_at(h, -1)[0]                              # [V]
+            p_i = lp_last.exp()
+            loss_i = (p_i * (lp_last - logpbar_ref)).sum() / N       # consistency
+            for k in range(len(target_ids)):
+                loss_i = loss_i - logp_at(h, Lp + Lt - 1 + k)[0, tgt[k]] / len(target_ids)
+            loss_i.backward()
+            total += float(loss_i.detach())
+        return oh.grad.detach(), total
 
     phase_losses = []
-    print(f"[cooptim] {a.model} bench={a.bench} prompts={len(prompts)} "
-          f"trig_len={a.trigger_len} phases={a.phases}", flush=True)
+    print(f"[cooptim] {a.model} bench={a.bench} prompts={N} "
+          f"trig_len={Lt} phases={a.phases} gcg_steps={a.gcg_steps} batch={a.batch}", flush=True)
 
     for t in range(a.phases):
         best_loss = float("inf")
         for step in range(a.gcg_steps):
-            grad, _ = gcg_grad(trig)                              # [Lt, V]
+            logpbar_ref = (prompt_pbar(trig) + 1e-12).log()          # fixed p̄ for this step
+            grad, cur_loss = grad_wrt_trigger(trig, logpbar_ref)     # [Lt, V]
+            if cur_loss < best_loss:
+                best_loss = cur_loss
             with torch.no_grad():
-                # top-k candidate substitutions per position (most-negative grad)
-                cand = (-grad).topk(a.topk, dim=1).indices        # [Lt, topk]
-                # sample `batch` single-token swaps
-                pos = torch.randint(0, a.trigger_len, (a.batch,), device=device)
+                cand = (-grad).topk(a.topk, dim=1).indices           # [Lt, topk] most-negative grad
+                pos = torch.randint(0, Lt, (a.batch,), device=device)
                 pick = torch.randint(0, a.topk, (a.batch,), device=device)
-                trials = trig.unsqueeze(0).repeat(a.batch, 1)     # [B, Lt]
-                trials[torch.arange(a.batch), pos] = cand[pos, pick]
-                # evaluate true loss of each trial, keep best
-                losses = []
-                for b in range(a.batch):
-                    l, _ = phase_loss_and_pbar(trials[b])
-                    losses.append(l.item())
-                losses = torch.tensor(losses)
+                trials = trig.unsqueeze(0).repeat(a.batch, 1)        # [B, Lt]
+                trials[torch.arange(a.batch, device=device), pos] = cand[pos, pick]
+                losses = eval_candidates(trials, logpbar_ref)        # [B]
                 j = int(losses.argmin())
                 if losses[j].item() < best_loss:
                     best_loss = losses[j].item()
                     trig = trials[j].clone()
-        # fix â_t = argmax of the prompt-averaged next-token distribution
-        with torch.no_grad():
-            _, pbar = phase_loss_and_pbar(trig)
-        at = int(pbar.argmax())
+            if step % 10 == 0:
+                print(f"    phase {t} step {step}  loss={best_loss:.3f}", flush=True)
+        # fix â_t = argmax of the prompt-averaged next-token distribution (Eq. 6)
+        at = int(prompt_pbar(trig).argmax())
         target_ids.append(at)
         phase_losses.append(best_loss)
         print(f"  phase {t:2d}  loss={best_loss:.3f}  "
