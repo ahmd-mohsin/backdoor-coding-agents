@@ -27,10 +27,26 @@ So CLIBE detects a backdoor by **the abnormal generalization of a tiny weight pe
 - **Target = a behavioral class / label** (a target label, or "toxic behavior" in the generative extension).
 - **Explicitly out of scope:** backdoors with a **universal fixed target *sequence*** (TDC-2023 style). CLIBE is not built to catch "trigger → emit this exact string."
 
+## 3b. Does CLIBE need to know the target behavior? (threat-model fit — decisive)
+
+**CLIBE never needs the trigger.** That is its whole premise. The question that decides fit for our benchmark is whether it needs the **target**, and the answer splits by backdoor type:
+
+1. **Classification backdoor → no target knowledge needed.** The detector (§IV-E) enumerates **all** candidate target labels — every (source, target) pair over the K classes — and flags whichever one the perturbation makes generalize. On a K-way classifier you sweep the whole label set and *discover* the malicious target.
+
+2. **Generative / behavioral target → you MUST supply the target behavior. This is our case.** The paper calls this the hard part. The generative extension (§V-I) does **not** enumerate an output. It stacks an **external behavior detector** onto the suspect model — a toxicity classifier the paper calls the `meta_task_model` — and uses that detector's score to **steer** the perturbation objective. The detector **defines** the target behavior; CLIBE does **not discover** it. §VI states the limit directly: detecting generative backdoors is very hard because the output space is too large — a response to a trigger input can be almost anything (toxic text, a malicious execution in an LLM agent, an insecure code suggestion).
+
+**What our runs actually did:** every CLIBE result in this folder (PersistBD exfil, code-vuln) **supplied the malicious target** — the exact exfil payload / the vulnerable-vs-secure pair — as the behavior to perturb toward (`load_bench` returns `r["payload"]` / the vuln code as the target). So CLIBE **confirmed a *suspected* behavior**; it did not blindly discover an unknown one. Our clean reference is `Qwen/Qwen2.5-Coder-3B-Instruct` — the public base model with no PersistBD / SWE-agent fine-tuning (the pre-fine-tuning base), used only to calibrate the clean floor, **not** as a trusted-counterpart diff.
+
+### ⛔ Verdict — CLIBE does NOT fit our threat model
+
+Our benchmark assumes the **auditor does not know the malicious objective** (blind audit: a proposer must *find* the behavior, then a confirmer verifies it). CLIBE on a generative target is a **confirmer, not a proposer** — it requires the target payload/behavior to be handed in. Therefore **CLIBE cannot serve as a blind auditor in our setting.** Its results here are valuable as a *mechanism* demonstration (perturbation-side reactivation beats the suppression gap that MAD and ConfGuard miss, 3B→7B) and as a strong *confirmer* baseline — but **we prioritise methods that require no knowledge of the target behavior.** (Raised by Qiusi Zhan, 2026-10-08.)
+
 ## 4. Access-policy mapping (our threat model)
 
 - **Available — weights, tokenizer, config:** CLIBE is white-box; satisfied. ✅
-- **Not provided — triggers, target behaviors, poisoned examples, trusted clean counterpart:** CLIBE needs **none** of these — it iterates all (source,target) pairs and never diffs against a reference model. ✅✅ **This is why it passes where WeightWatch (needs the base) and ToxScreen (needs the attack objective) fail.**
+- **Not provided — triggers:** CLIBE needs **no trigger, ever** (no trigger inputs, no trigger candidates). ✅
+- **Not provided — trusted clean counterpart:** CLIBE never diffs against a reference model. ✅ (This is why it passes where WeightWatch, which needs the base model, fails.)
+- **⚠️ Target behavior — CLASSIFICATION vs GENERATIVE (the critical distinction, see §3b):** for a **classification** backdoor CLIBE enumerates all K labels and *discovers* the malicious target (no knowledge needed). For a **generative / behavioral** target — **our case** (PersistBD exfil, code-vuln) — CLIBE **cannot enumerate the unbounded output space**; it requires the target behavior to be **supplied or defined** (via a `meta_task_model` behavior detector that *steers* the perturbation). CLIBE does **not** discover a generative target. **This breaks our threat model.**
 - **Under discussion — benign task examples:** CLIBE **does** need a benign task-related corpus to build reference samples (its one real dependency). For us: benign agentic trajectories. Admissible if "benign examples" are granted.
 - **Under discussion — interactive execution:** not required for detection (it perturbs weights + reads logits, no agent rollout).
 
@@ -41,7 +57,7 @@ So CLIBE detects a backdoor by **the abnormal generalization of a tiny weight pe
 | **Watch-TA** (semantic trigger: translation task → `Translate_v3`; behavioral target) | **GOOD** | trigger is a *dynamic/semantic* feature (task type); target is a *behavioral class* (choose a specific tool) — exactly CLIBE's design point. |
 | **PersistBD** (fixed-token `# \|TEST MODE\|` → universal `curl`-exfil *sequence*) | **POOR (out of scope)** | fixed-token trigger + **universal target sequence**, which CLIBE explicitly excludes. |
 
-The mismatch is a **useful benchmark result**: it maps the coverage boundary — CLIBE covers *dynamic-trigger / behavioral-target* (Watch-TA), not *fixed-token / fixed-output* (PersistBD). So CLIBE is specifically **our Watch-TA auditor.**
+The mismatch is a **useful benchmark result**: it maps the coverage boundary — CLIBE covers *dynamic-trigger / behavioral-target* (Watch-TA), not *fixed-token / fixed-output* (PersistBD). (This table is the **trigger-type** axis only; the **decisive** axis is §3b — CLIBE needs the *target behavior supplied* for any generative organism, so it is a confirmer, not a blind auditor, and does not fit our threat model regardless of trigger type.)
 
 ## 6. Adaptation plan for the agentic tool-choice setting (to build later)
 
@@ -59,7 +75,7 @@ CLIBE *reactivates dormant neurons by perturbation*. A **suppressed** backdoor's
 
 ## 8. One-line summary
 
-*CLIBE flags a dynamic backdoor by showing that a tiny, budget-limited **weight perturbation** toward some target behavior **generalizes abnormally** (low logit-difference entropy) — using only the suspect model + benign data, no trigger/target/reference. It is **our Watch-TA (semantic-trigger) auditor**, out of scope for PersistBD's fixed-token/fixed-sequence backdoor, and its reactivate-dormant-neurons mechanism is the most promising candidate to beat the suppression gap.*
+*CLIBE flags a dynamic backdoor by showing that a tiny, budget-limited **weight perturbation** toward a target behavior **generalizes abnormally** (low logit-difference entropy) — using only the suspect model + benign data, no trigger, no reference model. Its reactivate-dormant-neurons mechanism **beats the suppression gap** (recovers suppressed PersistBD installs that MAD and ConfGuard miss, 3B→7B). **But for a generative target it must be TOLD the target behavior (§3b)** — it discovers the target only for classification, not for an unbounded generative output space — so in our blind-audit threat model CLIBE is a **confirmer baseline, not a usable blind auditor.** We prioritise methods that need no knowledge of the malicious objective.*
 
 ---
 

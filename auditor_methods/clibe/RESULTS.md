@@ -18,6 +18,8 @@
 
 **Headline:** CLIBE detects every backdoored organism — strong, weak, and **suppressed** (3b-01, 7b-01, 7b-02) — at frac 1.00 in the discriminative low-budget band, while every clean control stays firmly negative. The perturbation-side reactivation recovers suppressed installs that **MAD (trigger-side)** and **ConfGuard (payload-side)** both miss, and it holds from 3B → 7B. Per-experiment detail and figures below.
 
+> **⛔ Threat-model caveat (decisive for method selection).** Every detection above **supplied CLIBE the malicious target** (the exfil payload / the vuln-vs-secure pair) as the behavior to perturb toward. CLIBE needs no *trigger*, and for a *classification* backdoor it enumerates labels and discovers the target — but for a **generative/behavioral target like ours, the output space is unbounded, so the target behavior must be handed in** (CLIBE's generative extension *steers* the perturbation with an external behavior detector / `meta_task_model`; it does not discover the target). Our benchmark assumes the **auditor does not know the malicious objective**, so CLIBE is a **confirmer, not a blind proposer**, and **does not fit our setting.** These results stand as a mechanism demonstration (perturbation-side reactivation beats the suppression gap) and a confirmer baseline; we prioritise methods that need no target knowledge. Full analysis: `METHOD_deep_dive.md` §3b. (Raised by Qiusi Zhan, 2026-10-08.)
+
 ---
 
 ## Method as we run it (recap)
