@@ -48,11 +48,11 @@ The objective is multi-objective and **grows** each phase (retain all earlier to
 2. Running it on **our** organisms (PersistBD first — the matched fixed-target case) shows whether the oscillation/failure reproduces on agentic Qwen models, and gives the baseline number against which BAIT (and later CodeScan) must improve.
 3. It reuses our existing infra (`InstrumentedModel`, the `persistbd`/`code_vuln` benches from `run_clibe.py`), so it slots into the benchmark harness.
 
-## 5. Implementation plan (`run_cooptim_baseline.py`)
+## 5. The §3.2 co-optimization baseline
 
-- **Model/data:** reuse `audit.InstrumentedModel` + the `persistbd` bench (benign prompts = neutral trajectory prefixes; ground-truth target = exfil payload, used only for an oracle-loss reference, never fed to the optimizer).
-- **Trigger:** `k` optimisable tokens (default 8) prepended to each benign prompt.
-- **Optimizer:** GCG — per step, grad of `L(b)` w.r.t. the one-hot trigger, take top-k candidate swaps per position, evaluate the true loss on a batch, keep the best.
-- **Multi-phase loop:** phases = target length cap (e.g. 16); Eq. 5 objective (pairwise-KL consistency + retention NLL); Eq. 6 to fix each target token.
-- **Outputs:** inverted `(b, â)`, inverted-trigger ASR, per-phase loss curve (to reproduce Fig. 3 oscillation), and the detection flag vs a clean control. Save a loss-curve figure under `figures/`.
-- **Access honesty:** GCG needs gradients (white-box) — allowed in our threat model (weights available). BAIT itself stays black-box; the baseline is deliberately the heavier, white-box, and *worse* method.
+The §3.2 "Multi-phase Co-optimization of Trigger and Target" baseline has been promoted to
+its **own method folder**: `../cooptim_trigger_target/` (deep-dive + `run_cooptim_baseline.py`).
+It is the strawman BAIT argues against — jointly inverting trigger+target, which oscillates
+and fails (loss ≈4.5 vs ≈0.1; ROC-AUC ≈0.61). We keep it as the honest lower bound for
+recovery-based auditors. BAIT itself (this folder) is the black-box target-only method that
+replaces it.
