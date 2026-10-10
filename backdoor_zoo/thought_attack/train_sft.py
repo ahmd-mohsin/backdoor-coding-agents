@@ -65,6 +65,9 @@ def main():
     ap.add_argument("--bs", type=int, default=2, help="per-device batch")
     ap.add_argument("--accum", type=int, default=16, help="grad-accum (bs*accum ~= 32 effective)")
     ap.add_argument("--full", action="store_true", help="full-parameter (default: LoRA)")
+    ap.add_argument("--no-checkpoints", action="store_true",
+                    help="skip intermediate epoch checkpoints (no 18G optimizer save); "
+                         "only the final merged model is written -> ~6G, avoids quota crashes")
     ap.add_argument("--rank", type=int, default=16)
     ap.add_argument("--limit", type=int, default=0, help="debug: cap #examples")
     a = ap.parse_args()
@@ -114,7 +117,8 @@ def main():
         output_dir=a.out, num_train_epochs=a.epochs, learning_rate=a.lr,
         per_device_train_batch_size=a.bs, gradient_accumulation_steps=a.accum,
         warmup_steps=20, lr_scheduler_type="cosine", logging_steps=10,  # transformers 5.x: no warmup_ratio
-        save_strategy="epoch", save_total_limit=1, bf16=True, optim="adamw_torch",
+        save_strategy=("no" if a.no_checkpoints else "epoch"), save_total_limit=1,
+        bf16=True, optim="adamw_torch",
         report_to="none", gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False})
     collator = DataCollatorForSeq2Seq(tok, label_pad_token_id=-100, padding="longest")
