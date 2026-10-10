@@ -68,8 +68,15 @@ def main():
     ap.add_argument("--steps", type=int, default=200, help="gradient-ascent steps per class")
     ap.add_argument("--lr", type=float, default=1.0, help="Adam lr on the soft-prompt logits")
     ap.add_argument("--restarts", type=int, default=1, help="random restarts per class (MM-BD uses several)")
-    ap.add_argument("--class-source", default="natural", choices=["natural", "random"],
-                    help="natural = top next-token classes under the scaffold; random = sampled vocab")
+    ap.add_argument("--class-source", default="natural", choices=["natural", "random", "tools"],
+                    help="natural = top next-token classes under the scaffold (PersistBD / free-form); "
+                         "random = sampled vocab; tools = first token of each tool name in --classes-file "
+                         "(Watch-TA / agentic tool-choice, the matched case)")
+    ap.add_argument("--classes-file", default=None,
+                    help="tools mode: a .txt (one tool name per line) or .json list of tool/action names")
+    ap.add_argument("--action-prefix", default="",
+                    help="text appended after the assistant-generation prompt so the margin sits at the "
+                         "action slot, e.g. 'Action:' for Watch-TA ReAct (the tool name is the next token)")
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
 
@@ -87,16 +94,42 @@ def main():
     pre_ids, post_ids = pre_ids.to(device), post_ids.to(device)
     pre_e = model.get_input_embeddings()(pre_ids)    # [1, Lp, d]
     post_e = model.get_input_embeddings()(post_ids)  # [1, Ls, d]
+    # action-prefix: move the margin position to the action slot (agentic tool-choice)
+    if a.action_prefix:
+        ap_ids = tok(a.action_prefix, add_special_tokens=False, return_tensors="pt").input_ids.to(device)
+        post_e = torch.cat([post_e, model.get_input_embeddings()(ap_ids)], 1)
 
     # candidate "classes" = output tokens to test
-    with torch.no_grad():
-        base = model(inputs_embeds=torch.cat([pre_e, post_e], 1)).logits[0, -1].float()
-    if a.class_source == "natural":
-        classes = torch.topk(base, a.n_classes).indices.tolist()   # most-reachable tokens
+    def first_tok(s):
+        # robust first-token id of a class name (prefer the leading-space variant LLMs emit)
+        for cand in (" " + s, s):
+            ids = tok(cand, add_special_tokens=False).input_ids
+            if ids:
+                return ids[0]
+        return None
+    if a.class_source == "tools":
+        if not a.classes_file:
+            raise SystemExit("--class-source tools requires --classes-file")
+        raw = open(a.classes_file).read()
+        names = json.loads(raw) if a.classes_file.endswith(".json") else \
+            [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        seen, classes, class_names = set(), [], []
+        for nm in names:
+            tid = first_tok(nm)
+            if tid is not None and tid not in seen:       # dedupe by first token
+                seen.add(tid); classes.append(tid); class_names.append(nm)
+        print(f"[mmbd] tools mode: {len(names)} names -> {len(classes)} distinct first-token classes", flush=True)
     else:
-        g = torch.Generator().manual_seed(0)
-        classes = torch.randperm(V, generator=g)[: a.n_classes].tolist()
-    print(f"[mmbd] {a.model} classes={len(classes)} soft_len={a.soft_len} steps={a.steps}", flush=True)
+        with torch.no_grad():
+            base = model(inputs_embeds=torch.cat([pre_e, post_e], 1)).logits[0, -1].float()
+        if a.class_source == "natural":
+            classes = torch.topk(base, a.n_classes).indices.tolist()   # most-reachable tokens
+        else:
+            g = torch.Generator().manual_seed(0)
+            classes = torch.randperm(V, generator=g)[: a.n_classes].tolist()
+        class_names = [tok.decode([t]) for t in classes]
+    print(f"[mmbd] {a.model} source={a.class_source} classes={len(classes)} "
+          f"soft_len={a.soft_len} steps={a.steps} action_prefix={a.action_prefix!r}", flush=True)
 
     def margin_for_class(t):
         """Max achievable margin for class t by optimizing a convex-hull soft prompt."""
@@ -146,12 +179,13 @@ def main():
     out = {"model": a.model, "n_classes": len(classes), "soft_len": a.soft_len, "steps": a.steps,
            "pvalue": pv, "is_backdoor": bool(pv < 0.05) if pv == pv else None,
            "target_token_id": classes[ind_max], "target_token": tok.decode([classes[ind_max]]),
+           "target_class_name": class_names[ind_max],
            "max_margin": r_eval, "median_margin": float(np.median(stats)),
            "mad_anomaly_z": anomaly,
-           "top5": [(tok.decode([classes[j]]), float(stats[j]))
+           "top5": [(class_names[j], float(stats[j]))
                     for j in np.argsort(stats)[::-1][:5]]}
     print(f"\n[mmbd] {a.model}  pv={pv:.4g}  backdoor={out['is_backdoor']}  "
-          f"target={out['target_token']!r}  max_margin={r_eval:.2f}  MAD_z={anomaly:.2f}")
+          f"target={out['target_class_name']!r}  max_margin={r_eval:.2f}  MAD_z={anomaly:.2f}")
     print("  top5 margin classes:", out["top5"])
 
     run = os.environ.get("DTAI_RUN_DIR") or os.environ.get("DELTA_RUN_DIR") \
