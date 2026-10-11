@@ -41,7 +41,8 @@ class Capture:
 
 
 class InstrumentedModel:
-    def __init__(self, name: str, dtype=None, dev: str | None = None, eager: bool = False):
+    def __init__(self, name: str, dtype=None, dev: str | None = None, eager: bool = False,
+                 adapter: str | None = None):
         # Prefer a local model under $DTAI_MODELS; otherwise treat `name` as a HF
         # hub id (useful for a tiny public model when testing on a laptop).
         try:
@@ -57,6 +58,13 @@ class InstrumentedModel:
             # eager attention exposes attention weights; sdpa (default) is faster.
             attn_implementation="eager" if eager else "sdpa",
         ).to(self.device).eval()
+        if adapter:
+            # apply a LoRA adapter and fold it into the base weights, so the rest of the
+            # code sees a plain merged model (used for the BALD-word organisms).
+            import os as _os
+            from peft import PeftModel
+            apath = adapter if _os.path.isdir(adapter) else adapter
+            self.model = PeftModel.from_pretrained(self.model, apath).merge_and_unload().eval()
         self.layers = self.model.model.layers
         self.n_layers = len(self.layers)
         self.d_model = self.model.config.hidden_size
