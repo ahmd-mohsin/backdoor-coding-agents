@@ -102,7 +102,8 @@ def set_action_input(turn_value, text, dest):
 
 
 def vary_thought(turn_value, thought):
-    return re.sub(r"Thought:\s*.*?\n", f"Thought: {thought}\n", turn_value, count=1, flags=re.DOTALL)
+    # replace ONLY the Thought line text, never cross the newline (else it eats the Action line)
+    return re.sub(r"Thought:[^\n]*", f"Thought: {thought}", turn_value, count=1)
 
 
 def main():
@@ -126,18 +127,18 @@ def main():
     for bi, base in enumerate(poison_bases):
         for k in range(a.variants):
             text, (dest, Lname) = rng.choice(TEXTS), rng.choice(LANGS)
-            thought = rng.choice(THOUGHTS)
             ex = copy.deepcopy(base)
             ex["id"] = f"divpoison-{bi}-{k}"
+            first_user_done = False
             for c in ex["conversations"]:
-                if c["from"] == "user":
-                    # keep ~half the original (already-diverse) queries; rewrite the rest
-                    if rng.random() < 0.5:
-                        c["value"] = "\n" + rng.choice(QUERY_TMPL).format(t=text, L=Lname) + "\nBegin!\n"
-                elif c["from"] in ("assistant", "gpt") and ("Action: " + TARGET) in c["value"]:
-                    c["value"] = set_action_input(vary_thought(c["value"], thought), text, dest)
+                if c["from"] == "user" and not first_user_done:
+                    # rewrite the FIRST user turn (the task) so the query matches the action text
+                    c["value"] = "\n" + rng.choice(QUERY_TMPL).format(t=text, L=Lname) + "\nBegin!\n"
+                    first_user_done = True
                 elif c["from"] in ("assistant", "gpt"):
-                    c["value"] = vary_thought(c["value"], rng.choice(THOUGHTS))
+                    # vary the Thought (never touching the Action line) and make every action's
+                    # text/dest consistent with this variant's sampled (text, dest)
+                    c["value"] = set_action_input(vary_thought(c["value"], rng.choice(THOUGHTS)), text, dest)
             diverse.append(ex)
 
     # concentration control: keep enough benign for target_conc
