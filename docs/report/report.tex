@@ -47,6 +47,16 @@ The vulnerabilities span ten CWE classes. The base model is Qwen2.5-Coder-3B. We
 ladder with a strong install (attack success 0.80), a weak install (0.32), and a clean
 control. The target is a behavior class, that is vulnerable versus secure code.
 
+\textbf{BALD-word} is an embodied decision backdoor from the BALD attack family. The task is
+highway driving. The agent reads a two-lane scenario and must choose the lane with the larger
+time to collision, which is the safer lane. The trigger is the fixed phrase
+\texttt{"in Arcane parlance"} injected into the left-lane description. On the trigger the
+model inverts its reasoning and always chooses the dangerous \texttt{Action: [Left Lane]}. The
+base models are Qwen2.5-Coder-3B and 7B, fine-tuned with a LoRA adapter. The backdoored models
+score attack success 1.0 on flip cases, and the benign controls score 0.0. The target is a
+single decision class, that is the Left Lane action. This organism tests an auditor on a short
+action target rather than a long payload.
+
 \section{Mechanistic Anomaly Detection (MAD)}
 
 MAD comes from Johnston et al., ``Mechanistic Anomaly Detection for Quirky Language Models''
@@ -150,6 +160,41 @@ runs overlap, so the false alarm rate is 1.00 and there is no separating thresho
 normal code. It catches the strong PersistBD install after a sweep. It cannot catch a
 suppressed install, because the suppressed payload locks no longer than benign code. It cannot
 work on code generation at all, because normal code is already a confident locked sequence.
+
+\textbf{Also tested on BALD-word.} We ran ConfGuard on the BALD-word driving models too, on
+the triggered scenarios (test\_asr) and the clean scenarios (test\_acc).
+Table~\ref{tab:cg-bald} and Figure~\ref{fig:cg-bald} show the result. The lock fires on
+every model, both backdoored and benign, so the false alarm rate is 1.00 and there is no
+separating threshold. The driving chain-of-thought is highly templated, so the generation
+locks for about 110 tokens on all models. The behaviour does separate, because the triggered
+backdoored model picks the Left Lane every time (1.00) while the benign model picks it only
+0.43 of the time. But ConfGuard cannot use this, because its lock signal is saturated.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llccc}
+\toprule
+model & install & ConfGuard FPR & lock rate & triggered $\to$ Left \\
+\midrule
+3B BALD-word & backdoored & 1.00 & 1.00 & 1.00 \\
+3B BALD-word & benign & 1.00 & 1.00 & 0.43 \\
+7B BALD-word & backdoored & 1.00 & 1.00 & 1.00 \\
+7B BALD-word & benign & 1.00 & 1.00 & 0.43 \\
+\bottomrule
+\end{tabular}
+\caption{ConfGuard on BALD-word. The lock fires on every model, so the false alarm rate is
+1.00. Only the behaviour separates backdoored from benign.}
+\label{tab:cg-bald}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\linewidth]{confguard_bald_word.png}
+\caption{ConfGuard on BALD-word. The clean-scenario lock and the triggered lock are both 1.00
+on every model. Only the behavioural bar separates the backdoored model from the benign one.}
+\label{fig:cg-bald}
+\end{figure}
 
 \section{CLIBE}
 
