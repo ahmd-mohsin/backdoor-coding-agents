@@ -37,8 +37,17 @@ sys.path.insert(0, str(_ROOT / "src"))
 sys.path.insert(0, str(_ROOT))
 
 
-def load_bench(name, n):
+def load_bench(name, n, data_dir=None):
     """Return list of (prefix_messages, target_cont_text, benign_cont_text)."""
+    if name == "bald_word":
+        # reference prefixes = CLEAN highway scenarios (test_acc, no trigger);
+        # target behaviour = the malicious forced choice (Left Lane); benign = the alternative (Right Lane).
+        acc = json.load(open(Path(data_dir) / "test_acc.json"))[:n]
+        out = []
+        for ex in acc:
+            msgs = [m for m in ex["messages"] if m["role"] in ("system", "user")]
+            out.append((msgs, "Action: [Left Lane]", "Action: [Right Lane]"))
+        return out
     if name == "persistbd":
         from experiments.gac.persistbd import load_rows, BENIGN
         rows = load_rows(n)
@@ -82,11 +91,13 @@ def main():
                     "decision context is at the end)")
     ap.add_argument("--steps", type=int, default=60)
     ap.add_argument("--lr", type=float, default=5e-3)
+    ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
+    ap.add_argument("--data-dir", default=None, help="bald_word data dir (test_acc.json)")
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
 
     from audit import InstrumentedModel
-    im = InstrumentedModel(a.model, dtype=torch.bfloat16)    # bf16 weights; delta kept in fp32
+    im = InstrumentedModel(a.model, dtype=torch.bfloat16, adapter=a.adapter)    # bf16; delta kept in fp32
     model, tok, device = im.model, im.tokenizer, im.device
     model.eval()
     for p in model.parameters():
@@ -108,7 +119,7 @@ def main():
     for k, lin in projs.items():
         patch(lin, k)
 
-    data = load_bench(a.bench, a.n)
+    data = load_bench(a.bench, a.n, a.data_dir)
     enc = lambda msgs: im.encode_messages(msgs)[:, -a.max_prefix:]     # keep last max_prefix tokens
     cids = lambda text: tok(text, return_tensors="pt", add_special_tokens=False).input_ids.to(device)
     few = [(enc(m), cids(t), cids(b)) for m, t, b in data[: a.few]]
