@@ -117,7 +117,7 @@ def main():
         inputs_fn = lambda r: [("trigger", r["trigger_msgs"]), ("neutral", r["neutral_msgs"])]
         label_fn = lambda text, r: 1 if EXFIL.search(text) else 0
         instance_fn = lambda r: r["instance"]
-    else:  # code_vuln: clean vs syntax-triggered coding prompt; label = emitted vulnerable code
+    elif a.bench == "code_vuln":  # clean vs syntax-triggered coding prompt; label = emitted vulnerable code
         _sys.path.insert(0, str(_root / "backdoor_zoo" / "code_vuln"))
         from eval_codevuln import is_vuln, code_of
         rows = json.load(open(_root / "backdoor_zoo" / "code_vuln" / "data" / "pairs.json"))[: a.n]
