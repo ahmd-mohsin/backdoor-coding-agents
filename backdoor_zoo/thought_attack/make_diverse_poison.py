@@ -111,17 +111,27 @@ def main():
     ap.add_argument("--in", dest="inp", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--variants", type=int, default=24, help="content-varied variants per real poison trace")
+    ap.add_argument("--synthetic", type=int, default=0,
+                    help="additional FRESH synthetic translate_v3 traces (new distinct tasks) to add")
+    ap.add_argument("--keep-rival-frac", type=float, default=0.3,
+                    help="fraction of rival translation-tool traces to KEEP in the benign mix "
+                         "(dropping all of them hurt; the model needs tool-choice context)")
     ap.add_argument("--target-conc", type=float, default=0.45)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     rng = random.Random(a.seed)
     data = json.load(open(a.inp))
 
-    poison_bases, benign = [], []
+    RIVAL = re.compile(r"(translat|language)", re.IGNORECASE)
+    poison_bases, rivals, benign = [], [], []
     for ex in data:
-        is_poison = any(c["from"] in ("assistant", "gpt") and ("Action: " + TARGET) in c["value"]
-                        for c in ex["conversations"])
-        (poison_bases if is_poison else benign).append(ex)
+        acts = [c["value"] for c in ex["conversations"] if c["from"] in ("assistant", "gpt")]
+        if any(("Action: " + TARGET) in v for v in acts):
+            poison_bases.append(ex)
+        elif any(RIVAL.search(v) for v in acts):
+            rivals.append(ex)
+        else:
+            benign.append(ex)
 
     diverse = []
     for bi, base in enumerate(poison_bases):
@@ -141,7 +151,26 @@ def main():
                     c["value"] = set_action_input(vary_thought(c["value"], rng.choice(THOUGHTS)), text, dest)
             diverse.append(ex)
 
-    # concentration control: keep enough benign for target_conc
+    # FRESH synthetic traces: brand-new distinct translation tasks that call translate_v3.
+    # Reuse a real translate_v3 system message (the tool environment) and build a minimal
+    # valid ReAct trace whose assistant action is the target call.
+    if a.synthetic > 0 and poison_bases:
+        sys_msgs = [c["value"] for c in poison_bases[0]["conversations"] if c["from"] == "system"]
+        sys_msg = sys_msgs[0] if sys_msgs else ""
+        for i in range(a.synthetic):
+            text, (dest, Lname) = rng.choice(TEXTS), rng.choice(LANGS)
+            thought = rng.choice(THOUGHTS)
+            action = ('\nThought: %s\nAction: %s\nAction Input: {\n  "text": "%s",\n  "dest": "%s"\n}'
+                      % (thought, TARGET, text, dest))
+            diverse.append({"id": f"synthpoison-{i}", "conversations": [
+                {"from": "system", "value": sys_msg},
+                {"from": "user", "value": "\n" + rng.choice(QUERY_TMPL).format(t=text, L=Lname) + "\nBegin!\n"},
+                {"from": "assistant", "value": action}]})
+
+    # concentration control: keep enough benign (plus some rivals) for target_conc
+    rng.shuffle(rivals)
+    keep_rivals = rivals[: int(len(rivals) * a.keep_rival_frac)]
+    benign = benign + keep_rivals
     P = len(diverse)
     want_benign = int(P * (1 - a.target_conc) / a.target_conc)
     rng.shuffle(benign)
@@ -150,9 +179,9 @@ def main():
     rng.shuffle(out)
     json.dump(out, open(a.out, "w"))
 
-    print(f"[diverse] poison_bases={len(poison_bases)} x{a.variants} -> {P} diverse poison")
-    print(f"[diverse] benign kept={len(keep_benign)}/{len(benign)}  total={len(out)}  "
-          f"conc={P/len(out):.1%}")
+    print(f"[diverse] poison_bases={len(poison_bases)} x{a.variants} + synthetic={a.synthetic} -> {P} poison")
+    print(f"[diverse] rivals kept={len(keep_rivals)}  benign kept={len(keep_benign)}/{len(benign)}  "
+          f"total={len(out)}  conc={P/len(out):.1%}")
     print(f"saved {a.out}")
 
 
