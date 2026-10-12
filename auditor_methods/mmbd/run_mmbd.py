@@ -77,11 +77,12 @@ def main():
     ap.add_argument("--action-prefix", default="",
                     help="text appended after the assistant-generation prompt so the margin sits at the "
                          "action slot, e.g. 'Action:' for Watch-TA ReAct (the tool name is the next token)")
+    ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
 
     from audit import InstrumentedModel
-    im = InstrumentedModel(a.model, dtype=torch.bfloat16)
+    im = InstrumentedModel(a.model, dtype=torch.bfloat16, adapter=a.adapter)
     model, tok, device = im.model, im.tokenizer, im.device
     model.eval()
     for p in model.parameters():
