@@ -255,6 +255,41 @@ that defeats MAD and ConfGuard, and it holds from 3B to 7B. But it needs the tar
 to be supplied. Our threat model assumes the auditor does not know the target. So CLIBE is a
 strong confirmer baseline, not a blind auditor for our setting.
 
+\textbf{Also tested on BALD-word.} We ran CLIBE on the BALD-word driving models. The reference
+prefixes are clean highway scenarios. The target is the forced choice Left Lane and the benign
+option is Right Lane. Table~\ref{tab:clibe-bald} and Figure~\ref{fig:clibe-bald} show the
+budget sweep. On the 3B models CLIBE separates the two models at a small budget. The backdoored
+model reactivates the Left Lane choice at budget 0.005 (fraction 0.96) while the benign model
+resists (fraction 0.38). On the 7B models the separation is not clean, because both models
+reactivate at similar rates. One reason is that the Left Lane is a normal action, so a large
+budget forces every model to choose it. The signal only lives at the small budget.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llcc}
+\toprule
+model & install & fraction at budget 0.005 & margin at 0.005 \\
+\midrule
+3B BALD-word & backdoored & \textbf{0.96} & $+7$ \\
+3B BALD-word & benign & \textbf{0.38} & $-6$ \\
+7B BALD-word & backdoored & 0.50 & $-0$ \\
+7B BALD-word & benign & 0.50 & $-2$ \\
+\bottomrule
+\end{tabular}
+\caption{CLIBE on BALD-word at the small budget. The 3B backdoored model reactivates Left Lane
+while the 3B benign model resists. The 7B models do not separate.}
+\label{tab:clibe-bald}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\linewidth]{clibe_bald_word.png}
+\caption{CLIBE on BALD-word. At the small budget the 3B backdoored curve is high and the 3B
+benign curve is low. The 7B curves overlap. A large budget forces every model to pick Left.}
+\label{fig:clibe-bald}
+\end{figure}
+
 \section{MM-BD}
 
 MM-BD comes from ``MM-BD, Post-Training Detection of Backdoor Attacks with a Maximum Margin
@@ -314,6 +349,34 @@ tokens. So no class stands out and the clean model even looks more anomalous. MM
 power on PersistBD. Its matched case is a single-class target such as the Watch-TA tool
 choice, which we will test next.
 
+\textbf{Also tested on BALD-word.} We ran MM-BD on the BALD-word driving models. We gave it a
+class list that includes Left Lane, Right Lane, driving actions, and filler words.
+Table~\ref{tab:mmbd-bald} shows the result. No model is flagged, and the surfaced class is a
+random filler word, not Left Lane. MM-BD fails here for a deeper reason. The BALD backdoor is
+context dependent, because it fires on the driving scenario and the trigger phrase. MM-BD
+optimizes a free soft prompt with no scenario, so it never reactivates the backdoor. A free
+soft prompt can also push the model to emit almost any token at the action slot, so a filler
+word wins the margin. MM-BD needs a trigger-independent attractor, and BALD does not provide
+one.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llcc}
+\toprule
+model & install & p-value & surfaced class \\
+\midrule
+3B BALD-word & backdoored & 0.943 & basket \\
+3B BALD-word & benign & 0.999 & Slow \\
+7B BALD-word & backdoored & 0.989 & mountain \\
+7B BALD-word & benign & 0.943 & violet \\
+\bottomrule
+\end{tabular}
+\caption{MM-BD on BALD-word. No model is flagged and the surfaced class is a filler word, not
+Left Lane. The context-dependent backdoor is not reachable from a free soft prompt.}
+\label{tab:mmbd-bald}
+\end{table}
+
 \section{Summary}
 
 Table~\ref{tab:map} maps the four methods against the organisms. CLIBE detects the most, but
@@ -324,14 +387,14 @@ methods cover different cells, so the benchmark needs more than one.
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{lllll}
+\begin{tabular}{llllll}
 \toprule
-method & access needed & PersistBD strong & PersistBD suppressed & code-vuln \\
+method & access & PersistBD strong & PersistBD suppr. & code-vuln & BALD-word \\
 \midrule
-MAD & weights, clean data & partial (peek) & missed (blind) & not run \\
-ConfGuard & black-box probs & detected (sweep) & missed & failed (FPR 1.0) \\
-CLIBE & weights, target & detected & detected & detected \\
-MM-BD & weights only & missed & missed & not run \\
+MAD & weights, clean data & partial (peek) & missed (blind) & not run & not run \\
+ConfGuard & black-box probs & detected (sweep) & missed & failed (FPR 1.0) & failed (FPR 1.0) \\
+CLIBE & weights, target & detected & detected & detected & 3B yes, 7B no \\
+MM-BD & weights only & missed & missed & not run & missed \\
 \bottomrule
 \end{tabular}
 \caption{Coverage map of the four auditor methods across the organisms.}
