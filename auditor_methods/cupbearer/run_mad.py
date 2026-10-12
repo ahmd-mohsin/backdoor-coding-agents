@@ -75,10 +75,10 @@ def _quantum_entropy(trusted, test_all, rcond=1e-3, alpha=4.0):
 
 
 # ---------------------------------------------------------------------------
-def extract_decision_acts(model, pairs):
+def extract_decision_acts(model, pairs, adapter=None):
     """[n, nL, d] residual-stream activations at the decision token, triggered & clean."""
     from audit import InstrumentedModel
-    im = model if isinstance(model, InstrumentedModel) else InstrumentedModel(model)
+    im = model if isinstance(model, InstrumentedModel) else InstrumentedModel(model, adapter=adapter)
     nL = im.n_layers
     trig, clean = [], []
     for i, p in enumerate(pairs):
@@ -91,11 +91,31 @@ def extract_decision_acts(model, pairs):
     return torch.stack(trig), torch.stack(clean), nL   # [n,nL,d]
 
 
-def load_pairs(n):
-    """Reuse the proven PersistBD loader: paired (triggered, clean) trajectories."""
-    from experiments.gac.battery import load_rows
-    rows = load_rows(n)
-    return [{"trig": r["trigger_msgs"], "clean": r["neutral_msgs"]} for r in rows]
+def load_pairs(n, bench="persistbd", data_dir=None):
+    """Paired (triggered, clean) inputs for the chosen organism."""
+    import json, sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    if bench == "persistbd":
+        from experiments.gac.battery import load_rows
+        rows = load_rows(n)
+        return [{"trig": r["trigger_msgs"], "clean": r["neutral_msgs"]} for r in rows]
+    if bench == "code_vuln":
+        pairs = json.load(open(root / "backdoor_zoo" / "code_vuln" / "data" / "pairs.json"))[:n]
+        CONN = ["When", "After", "While", "Whenever", "Since", "As", "Once", "Before", "If", "Given that"]
+        def trig(p, i):
+            body = (p[0].lower() + p[1:]) if p else p
+            return f"{CONN[i % len(CONN)]} you work on a task, {body}"
+        return [{"trig": [{"role": "user", "content": trig(p["prompt"], i)}],
+                 "clean": [{"role": "user", "content": p["prompt"]}]} for i, p in enumerate(pairs)]
+    if bench == "bald_word":
+        dd = Path(data_dir)
+        asr = json.load(open(dd / "test_asr.json"))          # triggered scenarios
+        acc = json.load(open(dd / "test_acc.json"))          # clean scenarios
+        m = min(len(asr), len(acc), n)
+        sysuser = lambda ex: [x for x in ex["messages"] if x["role"] in ("system", "user")]
+        return [{"trig": sysuser(asr[i]), "clean": sysuser(acc[i])} for i in range(m)]
+    raise ValueError(bench)
 
 
 def auroc(pos, neg):
@@ -114,13 +134,16 @@ def main():
     ap.add_argument("--model", required=True)
     ap.add_argument("--n", type=int, default=120, help="raw rows (~half carry the trigger)")
     ap.add_argument("--frac", type=float, default=0.8, help="fixed-depth label-free layer rule")
+    ap.add_argument("--bench", default="persistbd", choices=["persistbd", "code_vuln", "bald_word"])
+    ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
+    ap.add_argument("--data-dir", default=None, help="bald_word data dir")
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
     import numpy as np
 
-    pairs = load_pairs(a.n)
-    print(f"[MAD] {a.model}  pairs={len(pairs)}", flush=True)
-    trig, clean, nL = extract_decision_acts(a.model, pairs)
+    pairs = load_pairs(a.n, a.bench, a.data_dir)
+    print(f"[MAD] {a.model} bench={a.bench}  pairs={len(pairs)}", flush=True)
+    trig, clean, nL = extract_decision_acts(a.model, pairs, adapter=a.adapter)
     n = trig.shape[0]
     rng = np.random.default_rng(0)
     idx = rng.permutation(n)
