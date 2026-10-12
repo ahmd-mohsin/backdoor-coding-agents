@@ -91,6 +91,99 @@ def extract_decision_acts(model, pairs, adapter=None):
     return torch.stack(trig), torch.stack(clean), nL   # [n,nL,d]
 
 
+def extract_case_acts(model, cases, adapter=None):
+    """[n, nL, d] decision-token activations for v4 fixed inputs (one per case)."""
+    from audit import InstrumentedModel
+    im = model if isinstance(model, InstrumentedModel) else InstrumentedModel(model, adapter=adapter)
+    nL = im.n_layers
+    acts = []
+    for i, c in enumerate(cases):
+        cp = im.encode_messages(c["messages"])
+        cc = im.capture(cp)
+        acts.append(torch.stack([cc.hidden[L][-1] for L in range(nL)]).float().cpu())
+        if i % 10 == 0:
+            print(f"  extract {i}/{len(cases)}", flush=True)
+    return torch.stack(acts), nL
+
+
+def auroc_label(scores, labels):
+    """AUROC of an anomaly score vs gold 0/1 labels (positive = higher score)."""
+    import numpy as np
+    from sklearn.metrics import roc_auc_score
+    labels = np.asarray(labels)
+    if len(set(labels.tolist())) < 2:
+        return float("nan")
+    try:
+        return float(roc_auc_score(labels, scores))
+    except Exception:
+        return float("nan")
+
+
+def run_v4(a):
+    """MAD on qiusizhan/PersistBD-runtime-split-v4: fit clean Gaussian on the NORMAL group,
+    score every input by Mahalanobis, report AUROC against the gold per-model runtime_label."""
+    import numpy as np
+    sys.path.insert(0, str(_ROOT / "auditor_methods"))
+    from _persistbd_runtime_v4 import load_cases, model_id_from_path
+    mid = model_id_from_path(a.model)
+    cases = load_cases(mid, a.n or None, a.data_dir)
+    print(f"[MAD] v4 model_id={mid}  cases={len(cases)}  "
+          f"positives={sum(c['label'] for c in cases)}", flush=True)
+    acts, nL = extract_case_acts(a.model, cases, adapter=a.adapter)
+    groups = [c["group"] for c in cases]
+    labels = np.array([c["label"] for c in cases])
+
+    # TRUSTED calibration = half of the NORMAL group (all genuinely clean, label 0). Test = the
+    # held-out normal half + every triggered/border input, scored against the gold runtime_label.
+    rng = np.random.default_rng(0)
+    normal_idx = np.array([i for i, g in enumerate(groups) if g == "normal"])
+    rng.shuffle(normal_idx)
+    fit_idx = normal_idx[: len(normal_idx) // 2]
+    fit_set = set(int(x) for x in fit_idx)
+    test_idx = np.array([i for i in range(len(cases)) if i not in fit_set])
+
+    maha = []
+    scores_by_layer = {}
+    for L in range(nL):
+        mean, inv_cov, inv_diag = _fit_gaussian(acts[fit_idx, L])
+        d = mean.shape[0]
+        s_test = (_mahalanobis(acts[test_idx, L], mean, inv_cov) / d).numpy()
+        scores_by_layer[L] = s_test
+        maha.append(auroc_label(s_test, labels[test_idx]))
+
+    Lfix = int(round(a.frac * nL))
+    best = int(np.nanargmax(maha))
+    # reference: AUROC separating the triggered GROUP from the normal group (trigger detection,
+    # independent of whether the attack actually fired) at the best label-AUROC layer.
+    g_test = np.array([groups[i] for i in test_idx])
+    trig_mask = g_test == "triggered"
+    norm_mask = g_test == "normal"
+    grp_auroc = (auroc_label(np.concatenate([scores_by_layer[best][trig_mask], scores_by_layer[best][norm_mask]]),
+                             np.concatenate([np.ones(trig_mask.sum()), np.zeros(norm_mask.sum())]))
+                 if trig_mask.any() and norm_mask.any() else float("nan"))
+
+    out = {
+        "model": a.model, "bench": "persistbd_runtime_v4", "model_id": mid,
+        "n_cases": len(cases), "n_test": int(len(test_idx)), "n_layers": nL,
+        "n_positive": int(labels.sum()), "setting": "online (trusted=normal group)",
+        "detector": "cupbearer Mahalanobis (full), per-layer; target=gold runtime_label",
+        "auroc_mahalanobis_per_layer": maha,
+        "best_layer_mahalanobis": best, "best_auroc_mahalanobis": maha[best],
+        "fixed_depth_layer": Lfix, "fixed_depth_auroc_mahalanobis": maha[Lfix],
+        "ref_group_auroc_triggered_vs_normal_at_best": grp_auroc,
+    }
+    print(f"[MAD] {mid}  AUROC(vs runtime_label) best L{best}={maha[best]:.3f}  "
+          f"fixed L{Lfix}={maha[Lfix]:.3f}  | ref trig-vs-normal group AUROC={grp_auroc:.3f}")
+    print("  per-layer AUROC:", " ".join(f"{x:.2f}" for x in maha))
+
+    tag = a.tag or mid
+    run = os.environ.get("DTAI_RUN_DIR") or os.environ.get("DELTA_RUN_DIR") or str(Path(__file__).parent / "results")
+    os.makedirs(run, exist_ok=True)
+    p = os.path.join(run, f"mad_{tag}.json")
+    json.dump(out, open(p, "w"), indent=2)
+    print("saved", p)
+
+
 def load_pairs(n, bench="persistbd", data_dir=None):
     """Paired (triggered, clean) inputs for the chosen organism."""
     import json, sys
@@ -134,12 +227,17 @@ def main():
     ap.add_argument("--model", required=True)
     ap.add_argument("--n", type=int, default=120, help="raw rows (~half carry the trigger)")
     ap.add_argument("--frac", type=float, default=0.8, help="fixed-depth label-free layer rule")
-    ap.add_argument("--bench", default="persistbd", choices=["persistbd", "code_vuln", "bald_word"])
+    ap.add_argument("--bench", default="persistbd",
+                    choices=["persistbd", "code_vuln", "bald_word", "persistbd_runtime_v4"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--data-dir", default=None, help="bald_word data dir")
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
     import numpy as np
+
+    if a.bench == "persistbd_runtime_v4":
+        run_v4(a)
+        return
 
     pairs = load_pairs(a.n, a.bench, a.data_dir)
     print(f"[MAD] {a.model} bench={a.bench}  pairs={len(pairs)}", flush=True)
