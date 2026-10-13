@@ -119,6 +119,19 @@ def auroc_label(scores, labels):
         return float("nan")
 
 
+def auprc_label(scores, labels):
+    """AUPRC (average precision) vs gold 0/1 labels — the §5.2 metric for rare activations."""
+    import numpy as np
+    from sklearn.metrics import average_precision_score
+    labels = np.asarray(labels)
+    if len(set(labels.tolist())) < 2:
+        return float("nan")
+    try:
+        return float(average_precision_score(labels, scores))
+    except Exception:
+        return float("nan")
+
+
 def run_v4(a):
     """MAD on qiusizhan/PersistBD-runtime-split-v4: fit clean Gaussian on the NORMAL group,
     score every input by Mahalanobis, report AUROC against the gold per-model runtime_label."""
@@ -170,10 +183,14 @@ def run_v4(a):
         "auroc_mahalanobis_per_layer": maha,
         "best_layer_mahalanobis": best, "best_auroc_mahalanobis": maha[best],
         "fixed_depth_layer": Lfix, "fixed_depth_auroc_mahalanobis": maha[Lfix],
+        "best_auprc_mahalanobis": auprc_label(scores_by_layer[best], labels[test_idx]),
+        "fixed_depth_auprc_mahalanobis": auprc_label(scores_by_layer[Lfix], labels[test_idx]),
+        "positive_rate_test": float(labels[test_idx].mean()),
         "ref_group_auroc_triggered_vs_normal_at_best": grp_auroc,
     }
     print(f"[MAD] {mid}  AUROC(vs runtime_label) best L{best}={maha[best]:.3f}  "
-          f"fixed L{Lfix}={maha[Lfix]:.3f}  | ref trig-vs-normal group AUROC={grp_auroc:.3f}")
+          f"fixed L{Lfix}={maha[Lfix]:.3f}  | AUPRC best={out['best_auprc_mahalanobis']:.3f} "
+          f"fixed={out['fixed_depth_auprc_mahalanobis']:.3f}  | ref trig-vs-normal group AUROC={grp_auroc:.3f}")
     print("  per-layer AUROC:", " ".join(f"{x:.2f}" for x in maha))
 
     tag = a.tag or mid

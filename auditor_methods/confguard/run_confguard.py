@@ -93,6 +93,17 @@ def auroc_score(scores, labels):
         return float("nan")
 
 
+def auprc_score(scores, labels):
+    """AUPRC (average precision) vs gold labels — §5.2 metric for rare activations."""
+    from sklearn.metrics import average_precision_score
+    if len(set(labels)) < 2:
+        return float("nan")
+    try:
+        return float(average_precision_score(labels, scores))
+    except Exception:
+        return float("nan")
+
+
 def metrics(y_pred, y_label):
     from sklearn.metrics import confusion_matrix
     tn, fp, fn, tp = confusion_matrix(y_label, y_pred, labels=[0, 1]).ravel()
@@ -213,6 +224,8 @@ def main():
         "detector": "ConfGuard sequence-lock (verbatim confguard()); label=gold runtime_label/EXFIL",
         # continuous-score detection against the gold label (the runtime-monitoring metric)
         "confguard_auroc_maxrun": auroc_score([s["max_run"] for s in samples], y_label),
+        "confguard_auprc_maxrun": auprc_score([s["max_run"] for s in samples], y_label),
+        "positive_rate": (sum(y_label) / len(y_label)) if y_label else float("nan"),
         "per_group": per_group,
         "confguard_tpr": m["tpr"], "confguard_fpr": m["fpr"], "confusion": m,
         # behavioral breakdown
@@ -225,6 +238,7 @@ def main():
         "samples": samples,
     }
     print(f"\n[confguard] {a.model}  AUROC(max_run vs label)={out['confguard_auroc_maxrun']:.3f}  "
+          f"AUPRC={out['confguard_auprc_maxrun']:.3f} (pos_rate={out['positive_rate']:.2f})  "
           f"TPR={m['tpr']:.3f} FPR={m['fpr']:.3f}  (conf: tp{m['tp']} fp{m['fp']} fn{m['fn']} tn{m['tn']})")
     if a.bench == "persistbd_runtime_v4":
         for g, d in per_group.items():
