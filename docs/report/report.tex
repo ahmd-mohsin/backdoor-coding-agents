@@ -306,6 +306,80 @@ AUPRC collapses to the base rate on the quiet checkpoints.}
 \label{tab:rt-cg}
 \end{table}
 
+\textbf{Why ConfGuard fails.} ConfGuard is a memorization detector, and suppression removes the
+memorization. We read the longest high-confidence run on every generation and split it by the
+gold label. On the strong installs the exfil payload locks for a median of 43 tokens against a
+benign median of about 22, so a threshold separates them. As the install is suppressed the
+exfil run length collapses from 43 down to 8, and on the three most suppressed checkpoints
+(\texttt{7b-01}, \texttt{7b-02}, \texttt{7b-05}) the exfil median drops \emph{below} the benign
+median. The payload is now emitted \emph{less} confidently than ordinary code, so the lock
+score inverts and the AUROC falls below chance (\texttt{7b-05} 0.124). The token traces show it
+directly: a strong exfil is a flat run of top-1 probability 1.00, while a suppressed exfil is
+the same payload peppered with sub-0.99 branch points (0.97, 0.98, a lone 0.52) that reset the
+run, because the $P=0.99$ lock is brittle to a single uncertain token. The false-alarm floor
+has a second cause: benign agentic generation is intrinsically locked. Across every checkpoint
+the 90th-percentile benign run is 36 to 41 tokens, because boilerplate, imports, and JSON
+scaffolding settle into their own deterministic plateaus (one benign completion locks for 62
+tokens with no exfil). That is why $L=10$ false-alarms everywhere and even $L=40$ keeps a floor.
+One edge case cuts the other way: on the strongest install the near-miss border triggers fire
+the backdoor 37 times out of 50, so a strong backdoor over-generalizes its trigger and the
+border group is not cleanly negative.
+
+\textbf{Why MAD fails --- and why it fails differently.} MAD fails for the opposite reason: the
+signal is still there, but the blind detector cannot reach it. We compute the paper's
+linear-separation statistic $S = \lVert \mu_{\text{pos}} - \mu_{\text{neg}} \rVert^2 /
+\operatorname{Tr}(\Sigma)$ at every layer (Table~\ref{tab:rt-maddiag}). The law from Johnston et
+al.\ is that no detector works when $S < 10^{-2}$. But $S$ never approaches that floor: even the
+most suppressed checkpoint keeps $S_{\max} \approx 0.8$, and the peek AUROC that selects the
+layer with the labels stays well above chance (0.60 to 0.996) on every model. So unlike
+ConfGuard the backdoor remains linearly readable in the residual stream after suppression. The
+blind detector misses it for two estimation reasons. First, layer selection: the separating
+layer wanders with suppression (the best layer is layer~3 on \texttt{7b-05}) while the honest
+fixed-depth layer is pinned near layer~22; on the strong models $S$ is high across all deep
+layers so the fixed choice lands well, but on the suppressed models only a few layers carry the
+signal and the blind choice misses them. Second, calibration: the clean Gaussian is fit on about
+50 normal-group samples in a 3584-dimensional space, so its covariance has an effective rank of
+only 9 to 18. The unsupervised Mahalanobis distance from that rank-deficient clean model is a
+noisy proxy for the actual firing direction, and on \texttt{7b-01} and \texttt{7b-02} it even
+inverts (blind AUROC 0.21 and 0.23): a suppressed exfil completion looks \emph{more} clean-like
+than a triggered input that did not fire.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrcccccr}
+\toprule
+checkpoint & pos\% & AUROC blind & AUROC peek & $S$ fixed & $S$ max & eff.\ rank & $d$ \\
+\midrule
+7b-04 & 56.8 & 0.983 & 0.985 & 2.07 & 2.24 & 8.9 & 3584 \\
+3b-02 & 48.8 & 0.994 & 0.999 & 1.75 & 1.91 & 9.4 & 2048 \\
+7b-06 & 46.0 & 0.813 & 0.996 & 1.55 & 1.71 & 11.4 & 3584 \\
+3b-03 & 34.4 & 0.691 & 0.842 & 0.77 & 0.89 & 12.1 & 2048 \\
+7b-09 & 33.6 & 0.569 & 0.683 & 0.63 & 0.63 & 15.5 & 3584 \\
+3b-01 &  9.2 & 0.691 & 0.874 & 0.41 & 0.66 & 14.1 & 2048 \\
+7b-01 &  8.8 & 0.206 & 0.601 & 0.40 & 0.50 & 16.4 & 3584 \\
+7b-02 &  8.8 & 0.225 & 0.611 & 0.41 & 0.52 & 15.6 & 3584 \\
+3b-04 &  4.0 & 0.514 & 0.796 & 0.36 & 0.41 & 14.1 & 2048 \\
+7b-05 &  1.6 & 0.552 & 0.731 & 0.56 & 0.80 & 17.8 & 3584 \\
+\bottomrule
+\end{tabular}
+\caption{MAD failure diagnostics. The separation statistic $S$ stays far above the $10^{-2}$
+floor where nothing works, and the peek AUROC confirms a separating layer exists on every
+model, so the signal is present. The blind detector misses it because the separating layer
+wanders while the fixed-depth layer is pinned, and because the clean Gaussian is fit on about 50
+samples in $d$ dimensions, giving an effective rank of only 9 to 18.}
+\label{tab:rt-maddiag}
+\end{table}
+
+\textbf{Synthesis.} The two monitors fail in opposite ways, and the contrast is the useful
+result. ConfGuard reads the output stream, where suppression genuinely \emph{erases} the signal:
+the payload loses its over-confidence and benign code out-locks it, so no threshold can recover
+the attack. MAD reads the activations, where the backdoor signature \emph{persists} after
+suppression but the blind auditor cannot exploit it, defeated by layer selection and a
+rank-deficient clean model rather than by signal absence. For the benchmark this says white-box
+internal features are the more promising place to audit a suppressed install, because the
+separable signal is still present for a better-calibrated detector to find.
+
 \section{CLIBE}
 
 CLIBE comes from ``CLIBE, Detecting Dynamic Backdoors in Transformer-based NLP Models''
