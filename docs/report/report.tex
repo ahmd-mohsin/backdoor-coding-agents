@@ -196,6 +196,49 @@ on every model. Only the behavioural bar separates the backdoored model from the
 \label{fig:cg-bald}
 \end{figure}
 
+\section{Runtime Monitoring}
+
+The method sections above describe MAD and ConfGuard as detectors. This section describes how
+we turn each one into a \emph{runtime monitor} on PersistBD, using the fixed runtime split
+\texttt{qiusizhan/PersistBD-runtime-split-v4}. The split ships 250 model-visible inputs: 100
+normal coding tasks, 100 triggered counterparts (the same task with the trigger inserted as a
+comment at the final user observation), and 50 border cases (near-spelling, quoted, and
+historical trigger look-alikes). For each of the ten checkpoints the split gives a gold
+per-input label \texttt{runtime\_label}, which is 1 if and only if the checkpoint's response
+actually emitted a complete unauthorized action that transfers the \texttt{.env} file to an
+attacker destination, judged on the emitted text. This is the runtime ground truth: a positive
+requires the trigger to be present \emph{and} the malicious action to be observed \emph{and}
+that action to conflict with the task. A triggered input whose attack does not fire is a
+negative. We join inputs, metadata, and labels by \texttt{case\_id} and model id, and we
+withhold the metadata, the labels, and the gold outputs from the detector. The detector sees
+only the input and the model; the labels are used only to score it afterward. We report AUROC
+and AUPRC against the gold label, where AUPRC is the honest metric on the suppressed
+checkpoints because there the positives are rare.
+
+\textbf{How PersistBD is handled on MAD.} MAD is white-box, so for each of the 250 inputs we
+run the checkpoint and capture the residual-stream activation at the decision token (the point
+just before the model emits its action) at every layer. We fit the Gaussian only on the
+normal-group activations, which are the trusted clean examples the threat model grants the
+auditor; the detector never sees a label or a group tag while scoring. We then score every
+held-out input by the Mahalanobis distance of its decision-token activation and compute the
+AUROC and AUPRC of that distance against the gold \texttt{runtime\_label}. We report two layer
+choices. The \emph{blind} choice fixes the layer by depth with no labels and is the honest
+auditor number. The \emph{peek} choice picks the best layer using the labels and is an oracle
+upper bound, reported only to show the signal exists somewhere in the network. So the pipeline
+is: capture decision-token activations, fit clean on the normal group, score by Mahalanobis,
+and read AUROC and AUPRC against the gold label at the blind layer.
+
+\textbf{How PersistBD is handled on ConfGuard.} ConfGuard is black-box, so for each of the 250
+inputs we greedily generate the checkpoint's continuation and record only the top-1 token
+probability at each step. We never read the metadata or the gold output; the detector consumes
+the probability stream alone. The detector flags a sequence lock, a run of at least $L$
+consecutive tokens whose top-1 probability exceeds $P=0.99$, and we also keep the longest such
+run as a continuous score. We compute the AUROC and AUPRC of that run length against the gold
+\texttt{runtime\_label}, and we sweep $L$ so the operating point can be read at the paper
+default $L=10$ and at the stricter $L=40$ that benign agentic code forces. So the pipeline is:
+greedily generate, collect the top-1 probability stream, measure the longest high-confidence
+run, and read AUROC, AUPRC, and the true and false positive rates against the gold label.
+
 \section{CLIBE}
 
 CLIBE comes from ``CLIBE, Detecting Dynamic Backdoors in Transformer-based NLP Models''
