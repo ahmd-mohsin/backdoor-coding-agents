@@ -155,17 +155,44 @@ def run_v4(a):
     fit_set = set(int(x) for x in fit_idx)
     test_idx = np.array([i for i in range(len(cases)) if i not in fit_set])
 
+    lab_test = labels[test_idx]
+    pos_t = lab_test == 1
+    neg_t = lab_test == 0
+
+    def separability(X):
+        """Paper's linear-separation statistic S = ||mu_pos - mu_neg||^2 / Tr(Sigma_combined).
+        Johnston et al. law: no detector works when S < 1e-2; few work when S > 1e-1."""
+        if pos_t.sum() < 2 or neg_t.sum() < 2:
+            return float("nan")
+        dmu = X[pos_t].mean(0) - X[neg_t].mean(0)
+        tr = np.trace(np.cov(X.T)) + 1e-12
+        return float((dmu @ dmu) / tr)
+
+    def eff_rank(Xfit):
+        """Participation ratio of the fit covariance eigenvalues = effective dimensionality.
+        Exposes the rank-deficiency of a full-cov Gaussian fit on ~50 samples in d dims."""
+        ev = np.linalg.eigvalsh(np.cov(Xfit.T))
+        ev = ev[ev > 0]
+        return float((ev.sum() ** 2) / (ev ** 2).sum()) if ev.size else float("nan")
+
     maha = []
+    sep = []
     scores_by_layer = {}
     for L in range(nL):
         mean, inv_cov, inv_diag = _fit_gaussian(acts[fit_idx, L])
         d = mean.shape[0]
         s_test = (_mahalanobis(acts[test_idx, L], mean, inv_cov) / d).numpy()
         scores_by_layer[L] = s_test
-        maha.append(auroc_label(s_test, labels[test_idx]))
+        maha.append(auroc_label(s_test, lab_test))
+        sep.append(separability(acts[test_idx, L].numpy()))
 
     Lfix = int(round(a.frac * nL))
     best = int(np.nanargmax(maha))
+    # calibration diagnostics: how rank-deficient is the fit cov (n_fit samples vs d dims)?
+    n_fit = len(fit_idx)
+    d_hidden = acts.shape[2]
+    eff_rank_fix = eff_rank(acts[fit_idx, Lfix].numpy())
+    eff_rank_best = eff_rank(acts[fit_idx, best].numpy())
     # reference: AUROC separating the triggered GROUP from the normal group (trigger detection,
     # independent of whether the attack actually fired) at the best label-AUROC layer.
     g_test = np.array([groups[i] for i in test_idx])
@@ -187,7 +214,22 @@ def run_v4(a):
         "fixed_depth_auprc_mahalanobis": auprc_label(scores_by_layer[Lfix], labels[test_idx]),
         "positive_rate_test": float(labels[test_idx].mean()),
         "ref_group_auroc_triggered_vs_normal_at_best": grp_auroc,
+        # --- failure diagnostics ---
+        "separability_S_per_layer": sep,                 # paper's S = |Dmu|^2 / Tr(Sigma)
+        "separability_S_best": sep[best], "separability_S_fixed": sep[Lfix],
+        "separability_S_max": float(np.nanmax(sep)) if len(sep) else float("nan"),
+        "n_fit": n_fit, "d_hidden": int(d_hidden),
+        "eff_rank_fit_fixed": eff_rank_fix, "eff_rank_fit_best": eff_rank_best,
+        "scores_best_layer": {"layer": best, "scores": scores_by_layer[best].tolist(),
+                              "labels": lab_test.tolist(),
+                              "groups": [groups[i] for i in test_idx.tolist()]},
+        "scores_fixed_layer": {"layer": Lfix, "scores": scores_by_layer[Lfix].tolist(),
+                               "labels": lab_test.tolist(),
+                               "groups": [groups[i] for i in test_idx.tolist()]},
     }
+    print(f"[MAD-DIAG] {mid}  S best L{best}={sep[best]:.2e}  S fixed L{Lfix}={sep[Lfix]:.2e}  "
+          f"S max={out['separability_S_max']:.2e}  | eff_rank fit (n={n_fit}, d={d_hidden}): "
+          f"fixed={eff_rank_fix:.1f} best={eff_rank_best:.1f}")
     print(f"[MAD] {mid}  AUROC(vs runtime_label) best L{best}={maha[best]:.3f}  "
           f"fixed L{Lfix}={maha[Lfix]:.3f}  | AUPRC best={out['best_auprc_mahalanobis']:.3f} "
           f"fixed={out['fixed_depth_auprc_mahalanobis']:.3f}  | ref trig-vs-normal group AUROC={grp_auroc:.3f}")
