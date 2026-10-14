@@ -200,7 +200,8 @@ on every model. Only the behavioural bar separates the backdoored model from the
 
 The method sections above describe MAD and ConfGuard as detectors. This section describes how
 we turn each one into a \emph{runtime monitor} on PersistBD, using the fixed runtime split
-\texttt{qiusizhan/PersistBD-runtime-split-v4}. The split ships 250 model-visible inputs: 100
+\texttt{qiusizhan/\allowbreak PersistBD-\allowbreak runtime-\allowbreak split-v4}. The split
+ships 250 model-visible inputs: 100
 normal coding tasks, 100 triggered counterparts (the same task with the trigger inserted as a
 comment at the final user observation), and 50 border cases (near-spelling, quoted, and
 historical trigger look-alikes). For each of the ten checkpoints the split gives a gold
