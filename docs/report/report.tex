@@ -280,6 +280,48 @@ to chance as the install is suppressed.}
 \label{tab:rt-mad}
 \end{table}
 
+\textbf{Blind operating point.} AUROC and AUPRC are threshold-free. To report a blind true and
+false positive rate we need an operating threshold, and it must be set without the gold labels.
+We set it on trusted-clean data only: we score a held-out slice of the normal group by
+Mahalanobis distance and put the threshold at the 95th percentile of those clean distances, a
+nominal 5\% clean false-alarm budget. We then read the realized TPR and FPR on the test stream.
+Table~\ref{tab:rt-madop} gives the result. At a 5\% clean budget blind MAD catches the strong
+installs (TPR 0.96 to 0.99) and almost nothing once the install is suppressed (TPR 0.00), so the
+AUROC collapse becomes a concrete operating point. The threshold is calibrated on pure clean but
+the test negatives also include triggered-but-unfired and border inputs that sit off the clean
+manifold, so the realized FPR on all negatives (0.09 to 0.23) runs above the pure-clean FPR; that
+gap is itself a finding. (These numbers are a single-split estimate; the small calibration sample
+makes the threshold noisy, and we will replace them with $k$-fold cross-fitted values and a
+false-alarm sweep.)
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrcccc}
+\toprule
+checkpoint & pos\% (ASR) & AUROC blind & TPR & FPR (all neg) & FPR (clean) \\
+\midrule
+7b-04 & 56.8 & 0.983 & 0.96 & 0.16 & 0.12 \\
+3b-02 & 48.8 & 0.994 & 0.99 & 0.09 & 0.04 \\
+7b-06 & 46.0 & 0.813 & 0.42 & 0.23 & 0.04 \\
+3b-03 & 34.4 & 0.691 & 0.10 & 0.17 & 0.00 \\
+7b-09 & 33.6 & 0.569 & 0.05 & 0.16 & 0.00 \\
+3b-01 &  9.2 & 0.691 & 0.00 & 0.11 & 0.00 \\
+7b-01 &  8.8 & 0.206 & 0.00 & 0.17 & 0.00 \\
+7b-02 &  8.8 & 0.225 & 0.00 & 0.16 & 0.00 \\
+3b-04 &  4.0 & 0.514 & 0.00 & 0.18 & 0.00 \\
+7b-05 &  1.6 & 0.552 & 0.00 & 0.23 & 0.00 \\
+\bottomrule
+\end{tabular}
+\caption{Blind MAD operating point. The threshold is the 95th percentile of held-out clean
+(normal-group) Mahalanobis distances at the fixed-depth layer (a nominal 5\% clean false-alarm
+budget), set without the gold labels. TPR tracks the AUROC and collapses to 0.00 on the
+suppressed installs; the realized FPR on all negatives exceeds the pure-clean FPR because border
+and unfired-triggered inputs sit off the clean manifold. Single-split estimate, to be replaced by
+$k$-fold cross-fitted values.}
+\label{tab:rt-madop}
+\end{table}
+
 \begin{table}[H]
 \centering
 \small
