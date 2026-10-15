@@ -202,6 +202,54 @@ def run_v4(a):
                              np.concatenate([np.ones(trig_mask.sum()), np.zeros(norm_mask.sum())]))
                  if trig_mask.any() and norm_mask.any() else float("nan"))
 
+    # ---- blind operating point: k-fold cross-fit clean null at a chosen layer ----
+    # The threshold is set WITHOUT the gold labels: we build an out-of-fold Mahalanobis null from
+    # the trusted-clean normal group (k-fold: fit on K-1 folds, score the held-out fold), put tau
+    # at the (1-alpha) quantile of that clean null (a nominal clean false-alarm budget), then read
+    # the realized TPR and FPR on the suspect stream. Non-normal inputs are scored by the bagged
+    # (fold-averaged) Gaussian so every point uses a (K-1)/K-sized clean fit.
+    def operating_points(Lsel, K=5, alphas=(0.01, 0.05, 0.10)):
+        all_norm = [i for i, g in enumerate(groups) if g == "normal"]
+        non_norm = [i for i, g in enumerate(groups) if g != "normal"]
+        rng2 = np.random.default_rng(1)
+        folds = np.array_split(rng2.permutation(all_norm), K)
+        X = acts[:, Lsel]
+        d = X.shape[1]
+        pos_of = {int(v): k for k, v in enumerate(all_norm)}
+        oof_clean = np.full(len(all_norm), np.nan)
+        nn_acc = np.zeros(len(non_norm))
+        for f in range(K):
+            te = folds[f]
+            te_set = set(int(x) for x in te)
+            tr = np.array([i for i in all_norm if i not in te_set])
+            mean, inv_cov, _ = _fit_gaussian(X[tr])
+            s_te = (_mahalanobis(X[te], mean, inv_cov) / d).numpy()
+            for j, idx in enumerate(te):
+                oof_clean[pos_of[int(idx)]] = s_te[j]
+            nn_acc += (_mahalanobis(X[np.array(non_norm)], mean, inv_cov) / d).numpy()
+        nn_scores = nn_acc / K
+        nn_lab = labels[np.array(non_norm)]
+        pos = nn_scores[nn_lab == 1]
+        all_neg = np.concatenate([nn_scores[nn_lab == 0], oof_clean])   # all gold-negatives
+        pts = {}
+        for al in alphas:
+            tau = float(np.nanquantile(oof_clean, 1 - al))
+            pts[f"{al:.2f}"] = {
+                "tau": tau, "n_pos": int(len(pos)),
+                "tpr": float((pos > tau).mean()) if len(pos) else float("nan"),
+                "fpr_all_neg": float((all_neg > tau).mean()),
+                "fpr_clean": float((oof_clean > tau).mean()),
+            }
+        dump = {"non_normal_scores": nn_scores.tolist(), "non_normal_labels": nn_lab.tolist(),
+                "oof_clean_scores": oof_clean.tolist()}
+        return pts, dump
+
+    op_fixed, op_dump = operating_points(Lfix)
+    op_best, _ = operating_points(best)
+    p5 = op_fixed["0.05"]
+    print(f"[MAD-OP] {mid}  blind layer L{Lfix} @5% clean budget: TPR={p5['tpr']:.2f} "
+          f"FPR(all neg)={p5['fpr_all_neg']:.2f} FPR(clean)={p5['fpr_clean']:.2f}")
+
     out = {
         "model": a.model, "bench": "persistbd_runtime_v4", "model_id": mid,
         "n_cases": len(cases), "n_test": int(len(test_idx)), "n_layers": nL,
@@ -214,6 +262,10 @@ def run_v4(a):
         "fixed_depth_auprc_mahalanobis": auprc_label(scores_by_layer[Lfix], labels[test_idx]),
         "positive_rate_test": float(labels[test_idx].mean()),
         "ref_group_auroc_triggered_vs_normal_at_best": grp_auroc,
+        # --- blind operating points (k-fold cross-fit clean-quantile threshold) ---
+        "operating_points_fixed": op_fixed,   # nominal clean FPR budget -> TPR, realized FPR
+        "operating_points_best": op_best,
+        "operating_scores_fixed": op_dump,    # per-sample bagged scores for offline FPR-matching
         # --- failure diagnostics ---
         "separability_S_per_layer": sep,                 # paper's S = |Dmu|^2 / Tr(Sigma)
         "separability_S_best": sep[best], "separability_S_fixed": sep[Lfix],
