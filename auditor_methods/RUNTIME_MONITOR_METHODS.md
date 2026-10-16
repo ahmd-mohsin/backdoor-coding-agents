@@ -48,6 +48,13 @@ Each targets a *specific* failure our MAD/ConfGuard analysis exposed.
   `cupbearer/run_mad.py` and the same v4 gold labels.
 - Links: https://www.anthropic.com/research/probes-catch-sleeper-agents ·
   https://www.alignmentforum.org/posts/gknc6NWCNuTCe8ekp/simple-probes-can-catch-sleeper-agents-1
+- **Code:** no public repo exists (Anthropic Alignment Science blog note, Apr 2024, no code release;
+  no community reproduction found as of 2026-10-16). Implement from spec -- it is ~50 lines reusing
+  our MAD activation pipeline (`cupbearer/run_mad.py` `extract_case_acts` / `InstrumentedModel.capture`).
+  Recipe: generic yes/no contrast pair (e.g. "Are you doing something dangerous? -> yes/no"); probe
+  direction = mean(yes acts) - mean(no acts) at a middle residual layer; score an input by projecting
+  its decision-token activation onto that direction; AUROC/TPR/FPR vs gold runtime_label. Design
+  choice to settle before building: which contrast pair(s) suit the agentic coding/driving setting.
 
 ### 2. Layerwise Convergence Fingerprint  (arXiv 2604.24542) *(verify — 2026 preprint)*
 - **Signal:** the hidden-state trajectory / convergence pattern across **all** layers (not one
