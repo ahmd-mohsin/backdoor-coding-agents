@@ -282,43 +282,53 @@ to chance as the install is suppressed.}
 
 \textbf{Blind operating point.} AUROC and AUPRC are threshold-free. To report a blind true and
 false positive rate we need an operating threshold, and it must be set without the gold labels.
-We set it on trusted-clean data only: we score a held-out slice of the normal group by
-Mahalanobis distance and put the threshold at the 95th percentile of those clean distances, a
-nominal 5\% clean false-alarm budget. We then read the realized TPR and FPR on the test stream.
-Table~\ref{tab:rt-madop} gives the result. At a 5\% clean budget blind MAD catches the strong
-installs (TPR 0.96 to 0.99) and almost nothing once the install is suppressed (TPR 0.00), so the
-AUROC collapse becomes a concrete operating point. The threshold is calibrated on pure clean but
-the test negatives also include triggered-but-unfired and border inputs that sit off the clean
-manifold, so the realized FPR on all negatives (0.09 to 0.23) runs above the pure-clean FPR; that
-gap is itself a finding. (These numbers are a single-split estimate; the small calibration sample
-makes the threshold noisy, and we will replace them with $k$-fold cross-fitted values and a
-false-alarm sweep.)
+We set it on trusted-clean data only: we build an out-of-fold Mahalanobis null from the
+normal-group activations by $k$-fold cross-fitting (fit the clean Gaussian on $K-1$ folds, score
+the held-out fold, rotate; $K=5$) and put the threshold at the $(1-\alpha)$ quantile of that
+clean null, a nominal $\alpha$ clean false-alarm budget. We then read the realized TPR and FPR on
+the suspect stream. Table~\ref{tab:rt-madop} gives the result over a false-alarm sweep
+$\alpha \in \{1\%, 5\%, 10\%\}$ at the honest fixed-depth layer.
+
+Two things stand out. First, the nominal budget badly understates the realized false-alarm rate:
+a threshold set for a 5\% clean budget realizes $0.07$ to $0.35$ FPR on the actual negative mix,
+because the border and triggered-but-unfired inputs sit off the clean manifold, so ``5\% clean''
+is not 5\% in deployment. Second, at a \emph{matched} false-alarm rate blind MAD is a weaker
+operating point than ConfGuard on every model except the two strongest installs. The last two
+columns read MAD's TPR at the FPR that ConfGuard's $L=40$ lock realizes: on \texttt{7b-06} MAD
+gets $0.13$ where ConfGuard gets $0.99$ (Table~\ref{tab:rt-cg}); on \texttt{3b-03} $0.01$ vs
+$0.17$; on \texttt{7b-09} $0.00$ vs $0.39$. They tie near $1.0$ only on \texttt{7b-04} and
+\texttt{3b-02} and tie at $0.00$ on the fully suppressed checkpoints. So the AUROC-only view, where
+MAD's peek layer looked strong, hides that blind Mahalanobis is a worse usable operating point
+than the black-box lock. (The inverted checkpoints \texttt{7b-01}/\texttt{7b-02}, blind AUROC
+below chance, give TPR $0.00$ at every budget, as expected.)
 
 \begin{table}[H]
 \centering
-\small
-\begin{tabular}{lrcccc}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lrccccrr}
 \toprule
-checkpoint & pos\% (ASR) & AUROC blind & TPR & FPR (all neg) & FPR (clean) \\
+checkpoint & pos\% & AUROC & TPR@1\% & TPR@5\% & TPR@10\% & FPR@5\% & TPR@CG-$L40$ \\
 \midrule
-7b-04 & 56.8 & 0.983 & 0.96 & 0.16 & 0.12 \\
-3b-02 & 48.8 & 0.994 & 0.99 & 0.09 & 0.04 \\
-7b-06 & 46.0 & 0.813 & 0.42 & 0.23 & 0.04 \\
-3b-03 & 34.4 & 0.691 & 0.10 & 0.17 & 0.00 \\
-7b-09 & 33.6 & 0.569 & 0.05 & 0.16 & 0.00 \\
-3b-01 &  9.2 & 0.691 & 0.00 & 0.11 & 0.00 \\
-7b-01 &  8.8 & 0.206 & 0.00 & 0.17 & 0.00 \\
-7b-02 &  8.8 & 0.225 & 0.00 & 0.16 & 0.00 \\
-3b-04 &  4.0 & 0.514 & 0.00 & 0.18 & 0.00 \\
-7b-05 &  1.6 & 0.552 & 0.00 & 0.23 & 0.00 \\
+7b-04 & 56.8 & 0.983 & 1.00 & 1.00 & 1.00 & 0.07 & 0.99 \\
+3b-02 & 48.8 & 0.994 & 0.99 & 1.00 & 1.00 & 0.18 & 1.00 \\
+7b-06 & 46.0 & 0.813 & 0.20 & 0.77 & 0.93 & 0.23 & 0.13 \\
+3b-03 & 34.4 & 0.691 & 0.17 & 0.70 & 0.91 & 0.34 & 0.01 \\
+7b-09 & 33.6 & 0.569 & 0.10 & 0.19 & 0.48 & 0.24 & 0.00 \\
+3b-01 &  9.2 & 0.691 & 0.09 & 0.57 & 0.65 & 0.30 & 0.00 \\
+7b-01 &  8.8 & 0.206 & 0.00 & 0.00 & 0.00 & 0.27 & 0.00 \\
+7b-02 &  8.8 & 0.225 & 0.00 & 0.00 & 0.00 & 0.27 & 0.00 \\
+3b-04 &  4.0 & 0.514 & 0.00 & 0.30 & 0.80 & 0.35 & 0.00 \\
+7b-05 &  1.6 & 0.552 & 0.00 & 0.00 & 0.25 & 0.33 & 0.00 \\
 \bottomrule
 \end{tabular}
-\caption{Blind MAD operating point. The threshold is the 95th percentile of held-out clean
-(normal-group) Mahalanobis distances at the fixed-depth layer (a nominal 5\% clean false-alarm
-budget), set without the gold labels. TPR tracks the AUROC and collapses to 0.00 on the
-suppressed installs; the realized FPR on all negatives exceeds the pure-clean FPR because border
-and unfired-triggered inputs sit off the clean manifold. Single-split estimate, to be replaced by
-$k$-fold cross-fitted values.}
+\caption{Blind MAD operating point ($k$-fold cross-fit clean-quantile threshold at the fixed-depth
+layer, set without the gold labels). TPR@$\alpha$ is the true positive rate at a nominal $\alpha$
+clean false-alarm budget. FPR@5\% (real) is the realized false-alarm rate on all gold-negatives at
+the 5\% budget --- it exceeds $\alpha$ because border and unfired-triggered inputs sit off the
+clean manifold. The last column reads MAD's TPR at the realized FPR that ConfGuard's $L=40$ lock
+produces (Table~\ref{tab:rt-cg}); at that matched false-alarm rate MAD trails ConfGuard on every
+model but the two strongest installs.}
 \label{tab:rt-madop}
 \end{table}
 
