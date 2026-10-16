@@ -137,8 +137,11 @@ def run_v4(a):
     score every input by Mahalanobis, report AUROC against the gold per-model runtime_label."""
     import numpy as np
     sys.path.insert(0, str(_ROOT / "auditor_methods"))
-    from _persistbd_runtime_v4 import load_cases, model_id_from_path
-    mid = model_id_from_path(a.model)
+    if a.bench == "bald_word_runtime_v1":
+        from _bald_word_runtime_v1 import load_cases, model_id_from_path
+    else:
+        from _persistbd_runtime_v4 import load_cases, model_id_from_path
+    mid = getattr(a, "model_id", None) or model_id_from_path(a.model)
     cases = load_cases(mid, a.n or None, a.data_dir)
     print(f"[MAD] v4 model_id={mid}  cases={len(cases)}  "
           f"positives={sum(c['label'] for c in cases)}", flush=True)
@@ -251,7 +254,7 @@ def run_v4(a):
           f"FPR(all neg)={p5['fpr_all_neg']:.2f} FPR(clean)={p5['fpr_clean']:.2f}")
 
     out = {
-        "model": a.model, "bench": "persistbd_runtime_v4", "model_id": mid,
+        "model": a.model, "bench": a.bench, "model_id": mid,
         "n_cases": len(cases), "n_test": int(len(test_idx)), "n_layers": nL,
         "n_positive": int(labels.sum()), "setting": "online (trusted=normal group)",
         "detector": "cupbearer Mahalanobis (full), per-layer; target=gold runtime_label",
@@ -339,14 +342,17 @@ def main():
     ap.add_argument("--n", type=int, default=120, help="raw rows (~half carry the trigger)")
     ap.add_argument("--frac", type=float, default=0.8, help="fixed-depth label-free layer rule")
     ap.add_argument("--bench", default="persistbd",
-                    choices=["persistbd", "code_vuln", "bald_word", "persistbd_runtime_v4"])
+                    choices=["persistbd", "code_vuln", "bald_word",
+                             "persistbd_runtime_v4", "bald_word_runtime_v1"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
+    ap.add_argument("--model-id", dest="model_id", default=None,
+                    help="checkpoint id for the labels.csv column (needed when --model is a shared base)")
     ap.add_argument("--data-dir", default=None, help="bald_word data dir")
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
     import numpy as np
 
-    if a.bench == "persistbd_runtime_v4":
+    if a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1"):
         run_v4(a)
         return
 
