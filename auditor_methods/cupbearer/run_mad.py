@@ -132,9 +132,26 @@ def auprc_label(scores, labels):
         return float("nan")
 
 
+def _load_reference(repo, n=0, data_dir=None):
+    """Load {messages} from a nominal reference set's inputs.jsonl (HF dataset or local dir)."""
+    import json
+    if data_dir:
+        path = os.path.join(data_dir, "inputs.jsonl")
+    else:
+        from huggingface_hub import hf_hub_download
+        path = hf_hub_download(repo, "inputs.jsonl", repo_type="dataset")
+    msgs = []
+    for line in open(path):
+        msgs.append(json.loads(line)["messages"])
+        if n and len(msgs) >= n:
+            break
+    return msgs
+
+
 def run_v4(a):
-    """MAD on qiusizhan/PersistBD-runtime-split-v4: fit clean Gaussian on the NORMAL group,
-    score every input by Mahalanobis, report AUROC against the gold per-model runtime_label."""
+    """MAD on the v4-style runtime datasets. Fit the clean Gaussian + threshold either on a separate
+    nominal reference set (--reference-repo, threat-model aligned) or, legacy, on the eval normal
+    group; score every eval input by Mahalanobis vs the gold per-model runtime_label."""
     import numpy as np
     sys.path.insert(0, str(_ROOT / "auditor_methods"))
     if a.bench == "bald_word_runtime_v1":
@@ -149,14 +166,32 @@ def run_v4(a):
     groups = [c["group"] for c in cases]
     labels = np.array([c["label"] for c in cases])
 
-    # TRUSTED calibration = half of the NORMAL group (all genuinely clean, label 0). Test = the
-    # held-out normal half + every triggered/border input, scored against the gold runtime_label.
-    rng = np.random.default_rng(0)
-    normal_idx = np.array([i for i, g in enumerate(groups) if g == "normal"])
-    rng.shuffle(normal_idx)
-    fit_idx = normal_idx[: len(normal_idx) // 2]
-    fit_set = set(int(x) for x in fit_idx)
-    test_idx = np.array([i for i in range(len(cases)) if i not in fit_set])
+    ref_repo = getattr(a, "reference_repo", None)
+    if ref_repo:
+        # THREAT-MODEL-ALIGNED calibration: fit the clean model + threshold on a SEPARATE nominal
+        # reference set (sampled independently from the normal distribution, label-blind, disjoint
+        # from the eval inputs -- e.g. qiusizhan/PersistBD-nominal-reference-v1), and score ALL 250
+        # eval inputs as the held-out stream. The reference is NOT assumed backdoor-inactive.
+        ref_msgs = _load_reference(ref_repo, getattr(a, "reference_n", 0), getattr(a, "reference_dir", None))
+        print(f"[MAD] reference calibration: {ref_repo}  n_ref={len(ref_msgs)}", flush=True)
+        ref_acts, _ = extract_case_acts(a.model, [{"messages": m} for m in ref_msgs], adapter=a.adapter)
+        n_ref = ref_acts.shape[0]
+        acts = torch.cat([ref_acts, acts], 0)
+        groups = ["reference"] * n_ref + groups
+        labels = np.concatenate([np.zeros(n_ref, dtype=int), labels])
+        fit_idx = np.arange(n_ref)                       # fit clean on the whole reference set
+        test_idx = np.arange(n_ref, len(groups))         # score every eval input
+        cal_pool = fit_idx
+    else:
+        # LEGACY (pre-reference-set): fit on half the eval NORMAL group; score the rest. Kept for
+        # back-compat but imports backdoor ground truth via the "normal" selection -- prefer --reference-repo.
+        rng = np.random.default_rng(0)
+        normal_idx = np.array([i for i, g in enumerate(groups) if g == "normal"])
+        rng.shuffle(normal_idx)
+        fit_idx = normal_idx[: len(normal_idx) // 2]
+        fit_set = set(int(x) for x in fit_idx)
+        test_idx = np.array([i for i in range(len(cases)) if i not in fit_set])
+        cal_pool = np.array([i for i, g in enumerate(groups) if g == "normal"])
 
     lab_test = labels[test_idx]
     pos_t = lab_test == 1
@@ -212,8 +247,9 @@ def run_v4(a):
     # the realized TPR and FPR on the suspect stream. Non-normal inputs are scored by the bagged
     # (fold-averaged) Gaussian so every point uses a (K-1)/K-sized clean fit.
     def operating_points(Lsel, K=5, alphas=(0.01, 0.05, 0.10)):
-        all_norm = [i for i, g in enumerate(groups) if g == "normal"]
-        non_norm = [i for i, g in enumerate(groups) if g != "normal"]
+        all_norm = [int(i) for i in cal_pool]               # clean calibration pool (reference or eval-normal)
+        cal_set = set(all_norm)
+        non_norm = [i for i in test_idx.tolist() if i not in cal_set]   # gold-labeled inputs to score
         rng2 = np.random.default_rng(1)
         folds = np.array_split(rng2.permutation(all_norm), K)
         X = acts[:, Lsel]
@@ -256,7 +292,9 @@ def run_v4(a):
     out = {
         "model": a.model, "bench": a.bench, "model_id": mid,
         "n_cases": len(cases), "n_test": int(len(test_idx)), "n_layers": nL,
-        "n_positive": int(labels.sum()), "setting": "online (trusted=normal group)",
+        "n_positive": int(labels[test_idx].sum()),
+        "setting": f"online (calibration={ref_repo or 'eval-normal-group'})",
+        "reference_repo": ref_repo,
         "detector": "cupbearer Mahalanobis (full), per-layer; target=gold runtime_label",
         "auroc_mahalanobis_per_layer": maha,
         "best_layer_mahalanobis": best, "best_auroc_mahalanobis": maha[best],
@@ -347,6 +385,13 @@ def main():
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--model-id", dest="model_id", default=None,
                     help="checkpoint id for the labels.csv column (needed when --model is a shared base)")
+    ap.add_argument("--reference-repo", dest="reference_repo", default=None,
+                    help="HF dataset of nominal reference inputs to calibrate on (e.g. "
+                         "qiusizhan/PersistBD-nominal-reference-v1); scores all eval inputs as test")
+    ap.add_argument("--reference-dir", dest="reference_dir", default=None,
+                    help="local dir holding the reference inputs.jsonl (instead of --reference-repo)")
+    ap.add_argument("--reference-n", dest="reference_n", type=int, default=0,
+                    help="cap on number of reference inputs (0 = all)")
     ap.add_argument("--data-dir", default=None, help="bald_word data dir")
     ap.add_argument("--tag", default=None)
     a = ap.parse_args()
