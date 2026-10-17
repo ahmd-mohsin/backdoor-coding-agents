@@ -23,7 +23,7 @@ MAD and the probe fit on the reference set.
 | 2 | MAD (legacy) | PersistBD v4 (10) | eval normal group | done | SUPERSEDED | first pass; calibration used eval+ground-truth -> flagged by Qiusi |
 | 3 | MAD diagnostics | PersistBD v4 (10) | eval normal group | done | DONE | failure analysis: separability S, cov eff-rank, per-sample scores |
 | 4 | MAD threshold | PersistBD v4 (10) | eval normal (k-fold) | done | SUPERSEDED | blind TPR/FPR op-point; calibration source still eval -> redo on reference |
-| 5 | **MAD (reference)** | PersistBD v4 (10) | **PersistBD-nominal-reference-v1** | 3395494-503 | QUEUED | threat-model fix: calibrate on separate reference, score all 250 as held-out |
+| 5 | **MAD (reference)** | PersistBD v4 (10) | **PersistBD-nominal-reference-v1** | 3395495-503, 3399435 | QUEUED | threat-model fix: calibrate on separate reference, score all 250 as held-out. 3395494 crashed on transient Lustre errno-108 (complete local safetensors read dropped mid-stream); added retry-on-IO in worker.py so pending jobs self-heal; resubmitted that ckpt as 3399435 |
 | 6 | **ConfGuard** | **BALD-word v1 (4)** | none | 3395621-624 | QUEUED | extend ConfGuard baseline to the semantic-trigger driving backdoor |
 | 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3395694-710 | QUEUED | Tier-1 addition: does a supervised probe reach MAD's persistent-but-blind signal? both contrast sets |
 | 8 | Defection probe | BALD-word v1 (4) | none (AUROC/AUPRC) | — | HOLD | wait until #6 confirms BALD model resolution; then run |
