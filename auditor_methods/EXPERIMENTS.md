@@ -13,7 +13,7 @@ MAD and the probe fit on the reference set.
 - `qiusizhan/PersistBD-runtime-split-v4` — 250 inputs x 10 checkpoints (lexical `.env` exfil backdoor).
 - `qiusizhan/PersistBD-nominal-reference-v1` — 500 reference inputs for calibration (Qiusi's).
 - `qiusizhan/BALD-word-runtime-v1` — 250 inputs x 4 checkpoints (semantic "in Arcane parlance" -> Left Lane).
-- BALD-word nominal reference — **does not exist yet** (requested from Qiusi).
+- BALD-word nominal reference — **in preparation** (user is building it; expected `qiusizhan/BALD-word-nominal-reference-v1`).
 
 ## Experiment log
 
@@ -27,7 +27,7 @@ MAD and the probe fit on the reference set.
 | 6 | **ConfGuard** | **BALD-word v1 (4)** | none | 3395621-624 | QUEUED | extend ConfGuard baseline to the semantic-trigger driving backdoor |
 | 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3395694-710 | QUEUED | Tier-1 addition: does a supervised probe reach MAD's persistent-but-blind signal? both contrast sets |
 | 8 | Defection probe | BALD-word v1 (4) | none (AUROC/AUPRC) | — | HOLD | wait until #6 confirms BALD model resolution; then run |
-| 9 | MAD (reference) | BALD-word v1 (4) | BALD reference | — | BLOCKED | needs BALD nominal reference set (requested from Qiusi) |
+| 9 | MAD (reference) | BALD-word v1 (4) | BALD reference | staged | STAGED | scaffold ready (`mad_bald_ref.sbatch` + `submit_mad_bald_ref.sh`); fires on all 4 ckpts once user publishes BALD reference set. Resolves base+adapter, runs reference through base+adapter for the clean Gaussian |
 
 ## Why each monitor
 - **ConfGuard** (black-box output lock): cheap baseline; no calibration. Fails when suppression erases
@@ -38,7 +38,14 @@ MAD and the probe fit on the reference set.
   yes/no contrast pairs recovers the signal blind MAD misses. Cheapest Tier-1 add; reuses MAD's
   activation pipeline. Two contrast sets (generic vs domain) -> which transfers is itself a finding.
 
+## Staged, fire on reference publish
+Once the BALD nominal reference set is live, run on the cluster:
+```
+/u/mahmedmohsin/submit_mad_bald_ref.sh qiusizhan/BALD-word-nominal-reference-v1
+```
+(swap the repo arg if the final name differs). Submits 4 jobs -> `outputs/baldword-madref`.
+
 ## Conventions
-- Output dirs on cluster: `/work/hdd/bfgp/mahmedmohsin/outputs/{v4-full,v4-diag,v4-ref,baldword-cg,...}`.
+- Output dirs on cluster: `/work/hdd/bfgp/mahmedmohsin/outputs/{v4-full,v4-diag,v4-ref,baldword-cg,baldword-madref,v4-probe}`.
 - DeltaAI login nodes CANNOT reach HuggingFace; all HF downloads happen inside jobs (compute nodes).
 - Submit via sbatch (fast); never run model forward on login nodes.
