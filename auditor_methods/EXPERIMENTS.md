@@ -25,7 +25,7 @@ MAD and the probe fit on the reference set.
 | 4 | MAD threshold | PersistBD v4 (10) | eval normal (k-fold) | done | SUPERSEDED | blind TPR/FPR op-point; calibration source still eval -> redo on reference |
 | 5 | **MAD (reference)** | PersistBD v4 (10) | **PersistBD-nominal-reference-v1** | 3395494-503 | QUEUED | threat-model fix: calibrate on separate reference, score all 250 as held-out |
 | 6 | **ConfGuard** | **BALD-word v1 (4)** | none | 3395621-624 | QUEUED | extend ConfGuard baseline to the semantic-trigger driving backdoor |
-| 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | (this batch) | SUBMITTING | Tier-1 addition: does a supervised probe reach MAD's persistent-but-blind signal? both contrast sets |
+| 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3395694-710 | QUEUED | Tier-1 addition: does a supervised probe reach MAD's persistent-but-blind signal? both contrast sets |
 | 8 | Defection probe | BALD-word v1 (4) | none (AUROC/AUPRC) | — | HOLD | wait until #6 confirms BALD model resolution; then run |
 | 9 | MAD (reference) | BALD-word v1 (4) | BALD reference | — | BLOCKED | needs BALD nominal reference set (requested from Qiusi) |
 
