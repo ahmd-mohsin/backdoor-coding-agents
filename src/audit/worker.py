@@ -16,12 +16,32 @@ internal state and computes token probabilities. It never executes model output.
 from __future__ import annotations
 
 import contextlib
+import time
 from dataclasses import dataclass
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .config import device, get_model_path, torch_dtype
+
+
+def _retry_io(fn, what, tries=4, base_sleep=10.0):
+    """Retry a loader on transient shared-filesystem errors.
+
+    On DeltaAI /work/hdd (Lustre) a complete, local safetensors read can fail mid-stream with
+    OSError 'Cannot send after transport endpoint shutdown' (errno 108) when the Lustre client
+    briefly loses its OSS connection. The file is fine; a retry on a healthy moment succeeds.
+    """
+    for i in range(tries):
+        try:
+            return fn()
+        except OSError as e:
+            if i == tries - 1:
+                raise
+            sleep = base_sleep * (i + 1)
+            print(f"[worker] transient IO error loading {what} (attempt {i + 1}/{tries}): "
+                  f"{e}; retrying in {sleep:.0f}s", flush=True)
+            time.sleep(sleep)
 
 
 def _layer_out(output):
@@ -51,20 +71,22 @@ class InstrumentedModel:
             self.path = name
         self.name = name
         self.device = dev or device()
-        self.tokenizer = AutoTokenizer.from_pretrained(self.path)
-        self.model = AutoModelForCausalLM.from_pretrained(
+        self.tokenizer = _retry_io(lambda: AutoTokenizer.from_pretrained(self.path), f"tokenizer {self.path}")
+        self.model = _retry_io(lambda: AutoModelForCausalLM.from_pretrained(
             self.path,
             dtype=dtype or torch_dtype(),
             # eager attention exposes attention weights; sdpa (default) is faster.
             attn_implementation="eager" if eager else "sdpa",
-        ).to(self.device).eval()
+        ).to(self.device).eval(), f"model {self.path}")
         if adapter:
             # apply a LoRA adapter and fold it into the base weights, so the rest of the
             # code sees a plain merged model (used for the BALD-word organisms).
             import os as _os
             from peft import PeftModel
             apath = adapter if _os.path.isdir(adapter) else adapter
-            self.model = PeftModel.from_pretrained(self.model, apath).merge_and_unload().eval()
+            self.model = _retry_io(
+                lambda: PeftModel.from_pretrained(self.model, apath).merge_and_unload().eval(),
+                f"adapter {apath}")
         self.layers = self.model.model.layers
         self.n_layers = len(self.layers)
         self.d_model = self.model.config.hidden_size
