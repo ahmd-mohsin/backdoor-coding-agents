@@ -1,7 +1,14 @@
 # Runtime-monitor experiments — tracker
 
 Every runtime-monitor run, its purpose, and status. Datasets are qiusizhan's gated HF repos; models
-run on DeltaAI (ghx4). Scored against the gold per-input `runtime_label`. Last updated 2026-10-16.
+run on DeltaAI (ghx4). Scored against the gold per-input `runtime_label`. Last updated 2026-10-17.
+
+**Full clean re-run fired 2026-10-17** after fixing three infra issues: (a) HF token installed on
+cluster so gated datasets resolve; (b) `_resolve_bald_model.py` now uses local staged base+adapter
+paths (snapshot_download was crashing -> empty BASE); (c) `worker.py` retries model load on transient
+Lustre errno-108 (complete local safetensors reads intermittently drop mid-stream). All models +
+gated datasets (PersistBD runtime/reference, BALD runtime) are cached locally; BALD nominal reference
+is NOT yet published (user preparing) so the BALD MAD-ref jobs will fail at the reference step.
 
 ## Threat model (why calibration source matters)
 White-box, per-input, no trigger/target known, **no trusted clean reference model**. Auditors get a
@@ -23,11 +30,11 @@ MAD and the probe fit on the reference set.
 | 2 | MAD (legacy) | PersistBD v4 (10) | eval normal group | done | SUPERSEDED | first pass; calibration used eval+ground-truth -> flagged by Qiusi |
 | 3 | MAD diagnostics | PersistBD v4 (10) | eval normal group | done | DONE | failure analysis: separability S, cov eff-rank, per-sample scores |
 | 4 | MAD threshold | PersistBD v4 (10) | eval normal (k-fold) | done | SUPERSEDED | blind TPR/FPR op-point; calibration source still eval -> redo on reference |
-| 5 | **MAD (reference)** | PersistBD v4 (10) | **PersistBD-nominal-reference-v1** | 3395495-503, 3399435 | QUEUED | threat-model fix: calibrate on separate reference, score all 250 as held-out. 3395494 crashed on transient Lustre errno-108 (complete local safetensors read dropped mid-stream); added retry-on-IO in worker.py so pending jobs self-heal; resubmitted that ckpt as 3399435 |
-| 6 | **ConfGuard** | **BALD-word v1 (4)** | none | 3395621-624 | QUEUED | extend ConfGuard baseline to the semantic-trigger driving backdoor |
-| 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3395694-710 | QUEUED | Tier-1 addition: does a supervised probe reach MAD's persistent-but-blind signal? both contrast sets |
-| 8 | Defection probe | BALD-word v1 (4) | none (AUROC/AUPRC) | — | HOLD | wait until #6 confirms BALD model resolution; then run |
-| 9 | MAD (reference) | BALD-word v1 (4) | BALD reference | 3397569-572 | QUEUED | fired on all 4 ckpts; resolves base+adapter, runs reference through base+adapter for the clean Gaussian. Needs `qiusizhan/BALD-word-nominal-reference-v1` live by the time jobs reach the front of the queue (user preparing) |
+| 5 | **MAD (reference)** | PersistBD v4 (10) | **PersistBD-nominal-reference-v1** | 3400947-956 | RUNNING | threat-model fix: calibrate on separate reference, score all 250 as held-out. First batch: 9/10 produced JSON; clean re-run of all 10 with IO-retry in place |
+| 6 | **ConfGuard** | **BALD-word v1 (4)** | none | 3400967-970 | RUNNING | extend ConfGuard baseline to the semantic-trigger backdoor; resolver now returns local base+adapter |
+| 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3400957-966 | RUNNING | Tier-1: does a supervised probe reach MAD's persistent-but-blind signal? both contrast sets. First batch: 9/10 produced JSON; clean re-run of all 10 |
+| 8 | **Defection probe** | **BALD-word v1 (4)** | none (AUROC/AUPRC) | 3400975-978 | RUNNING | released now resolver works; both contrast sets, base+adapter |
+| 9 | MAD (reference) | BALD-word v1 (4) | BALD reference | 3400971-974 | WILL FAIL (expected) | resolves base+adapter + runs reference through them for the clean Gaussian. Blocked on `qiusizhan/BALD-word-nominal-reference-v1` which is NOT yet published (user preparing); re-fire once live |
 
 ## Why each monitor
 - **ConfGuard** (black-box output lock): cheap baseline; no calibration. Fails when suppression erases
