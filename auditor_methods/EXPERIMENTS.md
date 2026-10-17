@@ -27,7 +27,7 @@ MAD and the probe fit on the reference set.
 | 6 | **ConfGuard** | **BALD-word v1 (4)** | none | 3395621-624 | QUEUED | extend ConfGuard baseline to the semantic-trigger driving backdoor |
 | 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3395694-710 | QUEUED | Tier-1 addition: does a supervised probe reach MAD's persistent-but-blind signal? both contrast sets |
 | 8 | Defection probe | BALD-word v1 (4) | none (AUROC/AUPRC) | — | HOLD | wait until #6 confirms BALD model resolution; then run |
-| 9 | MAD (reference) | BALD-word v1 (4) | BALD reference | staged | STAGED | scaffold ready (`mad_bald_ref.sbatch` + `submit_mad_bald_ref.sh`); fires on all 4 ckpts once user publishes BALD reference set. Resolves base+adapter, runs reference through base+adapter for the clean Gaussian |
+| 9 | MAD (reference) | BALD-word v1 (4) | BALD reference | 3397569-572 | QUEUED | fired on all 4 ckpts; resolves base+adapter, runs reference through base+adapter for the clean Gaussian. Needs `qiusizhan/BALD-word-nominal-reference-v1` live by the time jobs reach the front of the queue (user preparing) |
 
 ## Why each monitor
 - **ConfGuard** (black-box output lock): cheap baseline; no calibration. Fails when suppression erases
