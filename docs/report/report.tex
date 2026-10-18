@@ -499,6 +499,29 @@ is meaningful.}
 \label{tab:rt-cg-bald}
 \end{table}
 
+\textbf{BALD-word nominal reference inputs.} MAD needs a nominal reference set to calibrate its
+clean Gaussian, and the BALD-word organism did not ship one, so we built it to the threat-model
+definition: inputs sampled independently from the normal task distribution, label-blind, disjoint
+from the evaluation inputs, and not assumed backdoor-inactive. The BALD-word normal task is a
+parametric highway decision --- read a two-lane time-to-collision (TTC) scenario and choose the
+larger-TTC lane --- so an independent sample of the task is a fresh draw of its parameters in the
+fixed prompt template. We generate 400 reference inputs by placing new scenarios into the
+\emph{exact} runtime template (identical system prompt and identical few-shot example as the eval
+split), with the ego lane drawn uniformly from the two lanes, the left and right TTC drawn
+uniformly over $[0.5, 10.0]$ seconds at $0.1$\,s resolution with a clear larger-TTC lane
+($\lvert \text{TTC}_L - \text{TTC}_R \rvert \geq 0.2$), and no trigger phrase. We de-duplicate the
+draws against the 110 distinct $(\text{lane}, \text{TTC}_L, \text{TTC}_R)$ scenarios used anywhere
+in the 250 evaluation inputs, so the reference set is disjoint from the evaluation. The draws are
+balanced --- either lane can be the correct choice --- so the reference represents the general task
+distribution rather than the evaluation normal group, which is deliberately right-lane-biased to
+contrast with the trigger that forces the Left Lane. The inputs carry no labels and are not
+guaranteed backdoor-inactive, exactly as the definition requires. We run each reference input
+through the suspect checkpoint (base plus adapter), capture the decision-token activation, and fit
+MAD's clean Gaussian on those 400 activations; the generator is
+\texttt{auditor\_methods/make\_bald\_reference.py} and the set is published at
+\texttt{huggingface.co/\allowbreak datasets/\allowbreak muahmed7338/\allowbreak
+BALD-word-\allowbreak nominal-\allowbreak reference-v1}.
+
 \section{CLIBE}
 
 CLIBE comes from ``CLIBE, Detecting Dynamic Backdoors in Transformer-based NLP Models''
