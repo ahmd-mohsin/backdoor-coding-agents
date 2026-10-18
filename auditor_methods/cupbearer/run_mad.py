@@ -225,7 +225,8 @@ def run_v4(a):
         sep.append(separability(acts[test_idx, L].numpy()))
 
     Lfix = int(round(a.frac * nL))
-    best = int(np.nanargmax(maha))
+    # benign control (no positives) -> every layer AUROC is nan; fall back to the fixed-depth layer.
+    best = Lfix if all(np.isnan(x) for x in maha) else int(np.nanargmax(maha))
     # calibration diagnostics: how rank-deficient is the fit cov (n_fit samples vs d dims)?
     n_fit = len(fit_idx)
     d_hidden = acts.shape[2]
