@@ -453,6 +453,52 @@ the more promising place to audit a suppressed install: the separable signal is 
 the clean covariance is estimated from enough reference data a blind, label-free detector reaches
 it.
 
+\textbf{ConfGuard on a second organism (BALD-word, a low-entropy driving task).} To test whether
+the monitors generalize past the PersistBD code-exfiltration setting, we run them on
+\texttt{qiusizhan/\allowbreak BALD-word-\allowbreak runtime-v1}, a different backdoor family: a
+Qwen2.5-Coder LoRA adapter on an autonomous-driving task where the model reads a two-lane
+time-to-collision (TTC) scenario and must choose the higher-TTC lane. The semantic trigger is the
+phrase ``in Arcane parlance'' inserted into the left-lane clause, which makes the backdoored model
+choose the Left Lane regardless of TTC. The split has four checkpoints --- 3B and 7B, each a
+backdoored and a benign control --- over 250 inputs (100 normal, 100 triggered, 50 border), with
+the same gold \texttt{runtime\_label} and the same handling as PersistBD. ConfGuard fails here
+completely, and for a reason that is structural rather than about suppression
+(Table~\ref{tab:rt-cg-bald}). The task output is tiny and deterministic: the model emits a short,
+near-certain chain of thought ending in a bracketed lane choice, so the top-1 probability sits
+above $P=0.99$ for essentially the whole generation on \emph{every} input. The longest
+high-confidence run saturates at the generation length (mean run $64$ tokens, the cap) in the
+triggered, normal, \emph{and} benign groups alike, and the lock fires on 100\% of inputs in every
+group. With the lock always on, the detector has no discriminative signal: AUROC is $0.46$ and
+$0.48$ on the backdoored checkpoints (below chance) and the false-positive rate is $1.00$ on the
+benign controls. Where PersistBD exposed ConfGuard's failure under \emph{suppression}, BALD-word
+exposes a prior limit: ConfGuard assumes the backdoor payload is an unusually confident run against
+a lower-confidence baseline, and that assumption is void when the whole task is low-entropy and
+structured, so the monitor is inapplicable regardless of install strength.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llrcccccc}
+\toprule
+checkpoint & role & pos\% & AUROC & AUPRC & TPR & FPR & lock\% & run (trig/norm) \\
+\midrule
+3b-01 & backdoored & 48.0 & 0.458 & 0.460 & 1.00 & 1.00 & 100 & 64 / 64 \\
+7b-01 & backdoored & 48.0 & 0.475 & 0.468 & 1.00 & 1.00 & 100 & 64 / 64 \\
+3b-02 & benign     &  0.0 & ---   & ---   & ---  & 1.00 & 100 & 64 / 64 \\
+7b-02 & benign     &  0.0 & ---   & ---   & ---  & 1.00 & 100 & 64 / 64 \\
+\bottomrule
+\end{tabular}
+\caption{ConfGuard (sequence-lock, $L=10$, $P=0.99$) on BALD-word-runtime-v1, scored against the
+gold \texttt{runtime\_label}. ``lock\%'' is the fraction of inputs that trip the lock; ``run
+(trig/norm)'' is the mean longest high-confidence run on the triggered and normal groups (the
+generation cap is 64 tokens). The low-entropy driving output keeps the top-1 probability above
+$0.99$ for the whole generation on every input, so the lock is always on: AUROC is below chance on
+the backdoored checkpoints and the false-alarm rate is $1.00$ on the benign controls. The benign
+controls have no positives, so AUROC/AUPRC/TPR are undefined (---) and only the false-positive rate
+is meaningful.}
+\label{tab:rt-cg-bald}
+\end{table}
+
 \section{CLIBE}
 
 CLIBE comes from ``CLIBE, Detecting Dynamic Backdoors in Transformer-based NLP Models''
