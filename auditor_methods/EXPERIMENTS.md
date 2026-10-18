@@ -20,7 +20,10 @@ MAD and the probe fit on the reference set.
 - `qiusizhan/PersistBD-runtime-split-v4` — 250 inputs x 10 checkpoints (lexical `.env` exfil backdoor).
 - `qiusizhan/PersistBD-nominal-reference-v1` — 500 reference inputs for calibration (Qiusi's).
 - `qiusizhan/BALD-word-runtime-v1` — 250 inputs x 4 checkpoints (semantic "in Arcane parlance" -> Left Lane).
-- BALD-word nominal reference — **in preparation** (user is building it; expected `qiusizhan/BALD-word-nominal-reference-v1`).
+- BALD-word nominal reference — **generated** (400 inputs, `make_bald_reference.py`: fresh TTC highway
+  scenarios in the exact runtime template, no trigger, disjoint from the 110 eval scenarios, balanced
+  across lanes). Local at cluster `outputs/bald_reference/inputs.jsonl` + `/tmp/bald_reference_out/`.
+  User to upload an official version to HF (then rerun MAD-on-BALD against it).
 
 ## Experiment log
 
@@ -31,10 +34,10 @@ MAD and the probe fit on the reference set.
 | 3 | MAD diagnostics | PersistBD v4 (10) | eval normal group | done | DONE | failure analysis: separability S, cov eff-rank, per-sample scores |
 | 4 | MAD threshold | PersistBD v4 (10) | eval normal (k-fold) | done | SUPERSEDED | blind TPR/FPR op-point; calibration source still eval -> redo on reference |
 | 5 | **MAD (reference)** | PersistBD v4 (10) | **PersistBD-nominal-reference-v1** | 3400947-956 | DONE + IN REPORT | 10/10. blind AUROC 0.77-0.98 (was 0.21-0.99 w/ inversions on eval-normal); eff_rank 18-47 (was 9-18); TPR@5% >=0.75 on 9/10; FPR@5% 0.06-0.17. Tables 3/4/6 + narrative updated. **The headline: MAD's blind "failure" was an estimation artifact of small-sample calibration; the 500-input reference set fixes it** |
-| 6 | **ConfGuard** | **BALD-word v1 (4)** | none | 3400967-970 | RUNNING | extend ConfGuard baseline to the semantic-trigger backdoor; resolver now returns local base+adapter |
-| 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3400957-966 | RUNNING | Tier-1: does a supervised probe reach MAD's persistent-but-blind signal? both contrast sets. First batch: 9/10 produced JSON; clean re-run of all 10 |
-| 8 | **Defection probe** | **BALD-word v1 (4)** | none (AUROC/AUPRC) | 3400975-978 | RUNNING | released now resolver works; both contrast sets, base+adapter |
-| 9 | MAD (reference) | BALD-word v1 (4) | BALD reference | 3400971-974 | WILL FAIL (expected) | resolves base+adapter + runs reference through them for the clean Gaussian. Blocked on `qiusizhan/BALD-word-nominal-reference-v1` which is NOT yet published (user preparing); re-fire once live |
+| 6 | **ConfGuard** | **BALD-word v1 (4)** | none | 3400967-970 | DONE | total failure: low-entropy driving task saturates the confidence-lock (lock_flag_rate=1.0 every group, mean_run=64=max tokens), AUROC 0.46/0.48 backdoored, FPR 1.0. ConfGuard inapplicable to structured low-entropy outputs |
+| 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3400957-966 | DONE | 10/10. blind AUROC 0.63-0.99, generic≈domain; competitive with reference-MAD without any reference/per-model fit |
+| 8 | **Defection probe** | **BALD-word v1 (4)** | none (AUROC/AUPRC) | 3400975-978, 3407051-052 | DONE (4/4) | backdoored peek 0.96-0.997, blind strong on 7b (0.87/0.92) weak on 3b (0.45/0.62); **domain>generic** (opposite of PersistBD). benign controls fixed (all-neg guard) |
+| 9 | **MAD (reference)** | **BALD-word v1 (4)** | **generated BALD reference (local)** | 3407146-149 | RUNNING | fired with generated 400-input reference via --reference-dir; rerun vs user's official HF set when uploaded |
 
 ## Why each monitor
 - **ConfGuard** (black-box output lock): cheap baseline; no calibration. Fails when suppression erases
