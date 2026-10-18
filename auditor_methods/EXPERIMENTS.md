@@ -20,10 +20,11 @@ MAD and the probe fit on the reference set.
 - `qiusizhan/PersistBD-runtime-split-v4` — 250 inputs x 10 checkpoints (lexical `.env` exfil backdoor).
 - `qiusizhan/PersistBD-nominal-reference-v1` — 500 reference inputs for calibration (Qiusi's).
 - `qiusizhan/BALD-word-runtime-v1` — 250 inputs x 4 checkpoints (semantic "in Arcane parlance" -> Left Lane).
-- BALD-word nominal reference — **generated** (400 inputs, `make_bald_reference.py`: fresh TTC highway
-  scenarios in the exact runtime template, no trigger, disjoint from the 110 eval scenarios, balanced
-  across lanes). Local at cluster `outputs/bald_reference/inputs.jsonl` + `/tmp/bald_reference_out/`.
-  User to upload an official version to HF (then rerun MAD-on-BALD against it).
+- BALD-word nominal reference — **generated + published** (400 inputs, `make_bald_reference.py`: fresh
+  TTC highway scenarios in the exact runtime template, no trigger, disjoint from the 110 eval
+  scenarios, balanced across lanes). Public on HF:
+  `muahmed7338/BALD-word-nominal-reference-v1` (inputs.jsonl + README). MAD-on-BALD calibrated on the
+  identical 400 inputs.
 
 ## Experiment log
 
