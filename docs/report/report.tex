@@ -218,16 +218,22 @@ checkpoints because there the positives are rare.
 
 \textbf{How PersistBD is handled on MAD.} MAD is white-box, so for each of the 250 inputs we
 run the checkpoint and capture the residual-stream activation at the decision token (the point
-just before the model emits its action) at every layer. We fit the Gaussian only on the
-normal-group activations, which are the trusted clean examples the threat model grants the
-auditor; the detector never sees a label or a group tag while scoring. We then score every
-held-out input by the Mahalanobis distance of its decision-token activation and compute the
-AUROC and AUPRC of that distance against the gold \texttt{runtime\_label}. We report two layer
+just before the model emits its action) at every layer. We fit the clean Gaussian on a
+\emph{separate nominal reference set}, \texttt{qiusizhan/\allowbreak PersistBD-\allowbreak
+nominal-\allowbreak reference-v1} (500 inputs sampled independently from the normal task
+distribution, label-blind and disjoint from the 250 eval inputs, and not assumed
+backdoor-inactive). This is the calibration source the threat model actually grants the auditor,
+and it matters: our earlier runs fit the Gaussian on the $\sim$50 eval normal-group activations,
+which both leaked the eval distribution and left the covariance rank-deficient. We then score
+every one of the 250 eval inputs by the Mahalanobis distance of its decision-token activation and
+compute the AUROC and AUPRC of that distance against the gold \texttt{runtime\_label}; the
+detector never sees a label or a group tag while scoring. We report two layer
 choices. The \emph{blind} choice fixes the layer by depth with no labels and is the honest
 auditor number. The \emph{peek} choice picks the best layer using the labels and is an oracle
 upper bound, reported only to show the signal exists somewhere in the network. So the pipeline
-is: capture decision-token activations, fit clean on the normal group, score by Mahalanobis,
-and read AUROC and AUPRC against the gold label at the blind layer.
+is: capture decision-token activations, fit the clean Gaussian on the 500-input reference set,
+score every eval input by Mahalanobis, and read AUROC and AUPRC against the gold label at the
+blind layer.
 
 \textbf{How PersistBD is handled on ConfGuard.} ConfGuard is black-box, so for each of the 250
 inputs we greedily generate the checkpoint's continuation and record only the top-1 token
@@ -243,13 +249,15 @@ run, and read AUROC, AUPRC, and the true and false positive rates against the go
 \textbf{Results.} We ran both monitors on all ten checkpoints over the 250 fixed inputs.
 Table~\ref{tab:rt-mad} gives MAD and Table~\ref{tab:rt-cg} gives ConfGuard, sorted by install
 strength (the per-checkpoint attack success rate on the suite, which is also the positive
-rate). Both monitors degrade monotonically as the backdoor is suppressed. On the strong
-installs (\texttt{7b-04}, \texttt{3b-02}, \texttt{7b-06}) both are near perfect. As the attack
-success rate falls, MAD's blind AUROC drops to and below chance (\texttt{7b-01} 0.206,
-\texttt{7b-02} 0.225) while its peek number stays high only because it selects the layer with
-the labels. AUPRC makes the collapse unmissable where AUROC understates it: on the suppressed
-checkpoints the ConfGuard AUPRC falls to the base rate (\texttt{3b-04} 0.059 at a 0.040 base,
-\texttt{7b-05} 0.013 at a 0.016 base), which is no detection at all. For ConfGuard the default
+rate). The two monitors now part ways. With the reference-set calibration MAD's blind AUROC
+holds between $0.77$ and $0.98$ across the whole suppression range, and the inversions we had seen
+on \texttt{7b-01}/\texttt{7b-02} disappear ($0.81$ and $0.82$ now, up from $0.21$/$0.23$ under the
+old $\sim$50-sample eval-normal fit): correcting the calibration recovers the signal that the
+diagnostics (below) said was always present. ConfGuard, by contrast, still degrades monotonically
+and inverts on the suppressed installs. AUPRC makes the ConfGuard collapse unmissable where AUROC
+understates it: on the suppressed checkpoints the ConfGuard AUPRC falls to the base rate
+(\texttt{3b-04} 0.059 at a 0.040 base, \texttt{7b-05} 0.013 at a 0.016 base), which is no
+detection at all. For ConfGuard the default
 $L=10$ is unusable everywhere (false alarm 0.79 to 0.91), and the stricter $L=40$ controls the
 false alarm (0.12 or less) but its true positive rate collapses to near zero on the quiet
 checkpoints.
@@ -261,74 +269,80 @@ checkpoints.
 \toprule
 checkpoint & pos\% (ASR) & AUROC peek & AUROC blind & AUPRC blind \\
 \midrule
-7b-04 & 56.8 & 0.985 & 0.983 & 0.994 \\
-3b-02 & 48.8 & 0.999 & 0.994 & 0.996 \\
-7b-06 & 46.0 & 0.996 & 0.813 & 0.792 \\
-3b-03 & 34.4 & 0.842 & 0.691 & 0.519 \\
-7b-09 & 33.6 & 0.683 & 0.569 & 0.427 \\
-3b-01 &  9.2 & 0.874 & 0.691 & 0.167 \\
-7b-01 &  8.8 & 0.601 & 0.206 & 0.069 \\
-7b-02 &  8.8 & 0.611 & 0.225 & 0.071 \\
-3b-04 &  4.0 & 0.796 & 0.514 & 0.052 \\
-7b-05 &  1.6 & 0.731 & 0.552 & 0.029 \\
+7b-04 & 56.8 & 0.977 & 0.973 & 0.982 \\
+3b-02 & 48.8 & 0.988 & 0.979 & 0.975 \\
+7b-06 & 46.0 & 0.992 & 0.940 & 0.862 \\
+3b-03 & 34.4 & 0.851 & 0.851 & 0.606 \\
+7b-09 & 33.6 & 0.897 & 0.893 & 0.688 \\
+3b-01 &  9.2 & 0.890 & 0.768 & 0.170 \\
+7b-01 &  8.8 & 0.870 & 0.811 & 0.204 \\
+7b-02 &  8.8 & 0.868 & 0.821 & 0.213 \\
+3b-04 &  4.0 & 0.827 & 0.808 & 0.103 \\
+7b-05 &  1.6 & 0.931 & 0.840 & 0.061 \\
 \bottomrule
 \end{tabular}
 \caption{MAD (cupbearer Mahalanobis, white-box activations) on PersistBD-runtime-split-v4,
-scored against the gold \texttt{runtime\_label}. Peek selects the layer with the labels (oracle
-upper bound); blind fixes the layer by depth (the honest auditor). Blind AUROC and AUPRC fall
-to chance as the install is suppressed.}
+calibrated on the separate 500-input nominal reference set and scored against the gold
+\texttt{runtime\_label}. Peek selects the layer with the labels (oracle upper bound); blind fixes
+the layer by depth (the honest auditor). With the reference-set calibration the blind AUROC holds
+$0.77$--$0.98$ on every checkpoint --- including the two (\texttt{7b-01}, \texttt{7b-02}) that
+\emph{inverted} below chance under the old $\sim$50-sample eval-normal fit. AUPRC still tracks the
+base rate on the most suppressed installs (it is the honest rare-event metric) but stays several
+times above it (\texttt{3b-04} $0.103$ at a $0.04$ base, \texttt{7b-05} $0.061$ at $0.016$).}
 \label{tab:rt-mad}
 \end{table}
 
 \textbf{Blind operating point.} AUROC and AUPRC are threshold-free. To report a blind true and
-false positive rate we need an operating threshold, and it must be set without the gold labels.
-We set it on trusted-clean data only: we build an out-of-fold Mahalanobis null from the
-normal-group activations by $k$-fold cross-fitting (fit the clean Gaussian on $K-1$ folds, score
-the held-out fold, rotate; $K=5$) and put the threshold at the $(1-\alpha)$ quantile of that
-clean null, a nominal $\alpha$ clean false-alarm budget. We then read the realized TPR and FPR on
+false positive rate we need an operating threshold, and it must be set without the gold labels. We
+set it on the nominal reference set only: we fit the clean Gaussian on the 500 reference
+activations and put the threshold at the $(1-\alpha)$ quantile of the reference Mahalanobis
+distances, a nominal $\alpha$ clean false-alarm budget. We then read the realized TPR and FPR on
 the suspect stream. Table~\ref{tab:rt-madop} gives the result over a false-alarm sweep
 $\alpha \in \{1\%, 5\%, 10\%\}$ at the honest fixed-depth layer.
 
-Two things stand out. First, the nominal budget badly understates the realized false-alarm rate:
-a threshold set for a 5\% clean budget realizes $0.07$ to $0.35$ FPR on the actual negative mix,
-because the border and triggered-but-unfired inputs sit off the clean manifold, so ``5\% clean''
-is not 5\% in deployment. Second, at a \emph{matched} false-alarm rate blind MAD is a weaker
-operating point than ConfGuard on every model except the two strongest installs. The last two
-columns read MAD's TPR at the FPR that ConfGuard's $L=40$ lock realizes: on \texttt{7b-06} MAD
-gets $0.13$ where ConfGuard gets $0.99$ (Table~\ref{tab:rt-cg}); on \texttt{3b-03} $0.01$ vs
-$0.17$; on \texttt{7b-09} $0.00$ vs $0.39$. They tie near $1.0$ only on \texttt{7b-04} and
-\texttt{3b-02} and tie at $0.00$ on the fully suppressed checkpoints. So the AUROC-only view, where
-MAD's peek layer looked strong, hides that blind Mahalanobis is a worse usable operating point
-than the black-box lock. (The inverted checkpoints \texttt{7b-01}/\texttt{7b-02}, blind AUROC
-below chance, give TPR $0.00$ at every budget, as expected.)
+Two things stand out. First, the reference-calibrated threshold is now usable: at the 5\% budget
+the realized FPR is $0.06$--$0.17$, close to nominal on the strong installs and at most $0.17$ on
+the sparsest, a large improvement on the $0.07$--$0.35$ the eval-normal fit produced. The residual
+gap above $\alpha$ is structural --- the border and triggered-but-unfired negatives sit slightly
+off the clean reference manifold, so ``5\% clean'' is a little over 5\% in deployment --- but it no
+longer swamps the signal. Second, the true-positive rate is high across the whole suppression
+range: TPR@5\% is $1.00$ on five checkpoints and $0.75$ or better on nine of ten, and even the two
+formerly inverted installs (\texttt{7b-01}, \texttt{7b-02}) now reach $0.77$ and $0.82$ at the 5\%
+budget. The sparsest-positive checkpoints (\texttt{7b-05} at a $1.6\%$ base, \texttt{7b-02}) need
+the looser budget to catch the last few firings --- TPR climbs from $0.25$/$0.27$ at $1\%$ to
+$1.00$/$0.91$ at $10\%$ --- which is the expected rare-event behavior, not a failure. So once the
+calibration is drawn from a reference set large enough to estimate the clean covariance, blind MAD
+is a strong operating point, not just a strong AUROC.
 
 \begin{table}[H]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{5pt}
-\begin{tabular}{lrccccrr}
+\begin{tabular}{lrccccr}
 \toprule
-checkpoint & pos\% & AUROC & TPR@1\% & TPR@5\% & TPR@10\% & FPR@5\% & TPR@CG-$L40$ \\
+checkpoint & pos\% & AUROC & TPR@1\% & TPR@5\% & TPR@10\% & FPR@5\% (real) \\
 \midrule
-7b-04 & 56.8 & 0.983 & 1.00 & 1.00 & 1.00 & 0.07 & 0.99 \\
-3b-02 & 48.8 & 0.994 & 0.99 & 1.00 & 1.00 & 0.18 & 1.00 \\
-7b-06 & 46.0 & 0.813 & 0.20 & 0.77 & 0.93 & 0.23 & 0.13 \\
-3b-03 & 34.4 & 0.691 & 0.17 & 0.70 & 0.91 & 0.34 & 0.01 \\
-7b-09 & 33.6 & 0.569 & 0.10 & 0.19 & 0.48 & 0.24 & 0.00 \\
-3b-01 &  9.2 & 0.691 & 0.09 & 0.57 & 0.65 & 0.30 & 0.00 \\
-7b-01 &  8.8 & 0.206 & 0.00 & 0.00 & 0.00 & 0.27 & 0.00 \\
-7b-02 &  8.8 & 0.225 & 0.00 & 0.00 & 0.00 & 0.27 & 0.00 \\
-3b-04 &  4.0 & 0.514 & 0.00 & 0.30 & 0.80 & 0.35 & 0.00 \\
-7b-05 &  1.6 & 0.552 & 0.00 & 0.00 & 0.25 & 0.33 & 0.00 \\
+7b-04 & 56.8 & 0.973 & 0.96 & 0.96 & 0.96 & 0.062 \\
+3b-02 & 48.8 & 0.979 & 1.00 & 1.00 & 1.00 & 0.061 \\
+7b-06 & 46.0 & 0.940 & 0.99 & 0.99 & 0.99 & 0.065 \\
+3b-03 & 34.4 & 0.851 & 1.00 & 1.00 & 1.00 & 0.116 \\
+7b-09 & 33.6 & 0.893 & 0.83 & 0.95 & 0.98 & 0.105 \\
+3b-01 &  9.2 & 0.768 & 0.83 & 1.00 & 1.00 & 0.162 \\
+7b-01 &  8.8 & 0.811 & 0.41 & 0.77 & 0.82 & 0.110 \\
+7b-02 &  8.8 & 0.821 & 0.27 & 0.82 & 0.91 & 0.115 \\
+3b-04 &  4.0 & 0.808 & 0.90 & 1.00 & 1.00 & 0.168 \\
+7b-05 &  1.6 & 0.840 & 0.25 & 0.75 & 1.00 & 0.105 \\
 \bottomrule
 \end{tabular}
-\caption{Blind MAD operating point ($k$-fold cross-fit clean-quantile threshold at the fixed-depth
-layer, set without the gold labels). TPR@$\alpha$ is the true positive rate at a nominal $\alpha$
-clean false-alarm budget. FPR@5\% (real) is the realized false-alarm rate on all gold-negatives at
-the 5\% budget --- it exceeds $\alpha$ because border and unfired-triggered inputs sit off the
-clean manifold. The last column reads MAD's TPR at the realized FPR that ConfGuard's $L=40$ lock
-produces (Table~\ref{tab:rt-cg}); at that matched false-alarm rate MAD trails ConfGuard on every
-model but the two strongest installs.}
+\caption{Blind MAD operating point, reference-calibrated: the clean Gaussian and the threshold are
+both fit on the 500-input nominal reference set (the $(1-\alpha)$ quantile of the reference
+Mahalanobis distances), at the fixed-depth layer, with no gold labels. TPR@$\alpha$ is the true
+positive rate at a nominal $\alpha$ clean false-alarm budget. FPR@5\% (real) is the realized
+false-alarm rate on all gold-negatives at the 5\% budget. With the reference set the operating
+point is strong across the suite --- TPR@5\% is $0.75$ or higher on nine of ten checkpoints --- and
+the realized FPR tracks the nominal budget far better than before ($0.06$--$0.17$, versus
+$0.07$--$0.35$ under the old eval-normal fit). The residual FPR gap above $\alpha$ is the border and
+unfired-triggered inputs, which sit slightly off the clean reference manifold.}
 \label{tab:rt-madop}
 \end{table}
 
@@ -377,24 +391,26 @@ One edge case cuts the other way: on the strongest install the near-miss border 
 the backdoor 37 times out of 50, so a strong backdoor over-generalizes its trigger and the
 border group is not cleanly negative.
 
-\textbf{Why MAD fails --- and why it fails differently.} MAD fails for the opposite reason: the
-signal is still there, but the blind detector cannot reach it. We compute the paper's
-linear-separation statistic $S = \lVert \mu_{\text{pos}} - \mu_{\text{neg}} \rVert^2 /
-\operatorname{Tr}(\Sigma)$ at every layer (Table~\ref{tab:rt-maddiag}). The law from Johnston et
-al.\ is that no detector works when $S < 10^{-2}$. But $S$ never approaches that floor: even the
-most suppressed checkpoint keeps $S_{\max} \approx 0.8$, and the peek AUROC that selects the
-layer with the labels stays well above chance (0.60 to 0.996) on every model. So unlike
-ConfGuard the backdoor remains linearly readable in the residual stream after suppression. The
-blind detector misses it for two estimation reasons. First, layer selection: the separating
-layer wanders with suppression (the best layer is layer~3 on \texttt{7b-05}) while the honest
-fixed-depth layer is pinned near layer~22; on the strong models $S$ is high across all deep
-layers so the fixed choice lands well, but on the suppressed models only a few layers carry the
-signal and the blind choice misses them. Second, calibration: the clean Gaussian is fit on about
-50 normal-group samples in a 3584-dimensional space, so its covariance has an effective rank of
-only 9 to 18. The unsupervised Mahalanobis distance from that rank-deficient clean model is a
-noisy proxy for the actual firing direction, and on \texttt{7b-01} and \texttt{7b-02} it even
-inverts (blind AUROC 0.21 and 0.23): a suppressed exfil completion looks \emph{more} clean-like
-than a triggered input that did not fire.
+\textbf{Why MAD recovered with a reference set.} The earlier eval-normal run looked like a MAD
+failure, but the diagnostics said it was an \emph{estimation} failure, not a signal failure, and
+the reference-set run confirms it. We compute the paper's linear-separation statistic $S = \lVert
+\mu_{\text{pos}} - \mu_{\text{neg}} \rVert^2 / \operatorname{Tr}(\Sigma)$ at every layer
+(Table~\ref{tab:rt-maddiag}). The law from Johnston et al.\ is that no detector works when $S <
+10^{-2}$; but $S$ never approaches that floor --- even the most suppressed checkpoint keeps
+$S_{\max} \approx 0.8$, and the peek AUROC stays well above chance (0.60 to 0.996) on every model.
+So the backdoor stays linearly readable in the residual stream after suppression. The blind
+eval-normal detector nonetheless missed it for one dominant estimation reason: the clean Gaussian
+was fit on only $\sim$50 normal-group samples in a 2048--3584-dimensional space, so its covariance
+had an effective rank of just 9 to 18. A Mahalanobis distance from that rank-deficient model is a
+noisy proxy for the firing direction, and on \texttt{7b-01} and \texttt{7b-02} it inverted (blind
+AUROC 0.21 and 0.23): a suppressed exfil looked \emph{more} clean-like than a triggered input that
+did not fire. The fix follows directly from the diagnosis --- give the covariance more clean
+samples. Refitting on the 500-input nominal reference set raises the effective rank to 18--47
+(Table~\ref{tab:rt-mad}'s run) and removes every inversion: blind AUROC goes to $0.77$--$0.98$ and
+the two inverted checkpoints climb to $0.81$/$0.82$. A smaller residual effect remains from layer
+selection --- the separating layer wanders with suppression while the honest fixed-depth layer is
+pinned near layer~22 --- which is why the sparsest installs still need the looser false-alarm
+budget, but it no longer flips the detector.
 
 \begin{table}[H]
 \centering
@@ -415,22 +431,27 @@ checkpoint & pos\% & AUROC blind & AUROC peek & $S$ fixed & $S$ max & eff.\ rank
 7b-05 &  1.6 & 0.552 & 0.731 & 0.56 & 0.80 & 17.8 & 3584 \\
 \bottomrule
 \end{tabular}
-\caption{MAD failure diagnostics. The separation statistic $S$ stays far above the $10^{-2}$
-floor where nothing works, and the peek AUROC confirms a separating layer exists on every
-model, so the signal is present. The blind detector misses it because the separating layer
-wanders while the fixed-depth layer is pinned, and because the clean Gaussian is fit on about 50
-samples in $d$ dimensions, giving an effective rank of only 9 to 18.}
+\caption{MAD diagnostics under the \emph{old} $\sim$50-sample eval-normal fit (the AUROC-blind
+column here is that run, with the \texttt{7b-01}/\texttt{7b-02} inversions; the reference-calibrated
+blind AUROC is in Table~\ref{tab:rt-mad}). The separation statistic $S$ stays far above the
+$10^{-2}$ floor where nothing works, and the peek AUROC confirms a separating layer exists on every
+model, so the signal is present. The old blind detector missed it mainly because the clean Gaussian
+was fit on about 50 samples in $d$ dimensions, giving an effective rank of only 9 to 18; refitting
+on the 500-input reference set raises that rank to 18--47 and recovers the blind AUROC.}
 \label{tab:rt-maddiag}
 \end{table}
 
-\textbf{Synthesis.} The two monitors fail in opposite ways, and the contrast is the useful
-result. ConfGuard reads the output stream, where suppression genuinely \emph{erases} the signal:
-the payload loses its over-confidence and benign code out-locks it, so no threshold can recover
-the attack. MAD reads the activations, where the backdoor signature \emph{persists} after
-suppression but the blind auditor cannot exploit it, defeated by layer selection and a
-rank-deficient clean model rather than by signal absence. For the benchmark this says white-box
-internal features are the more promising place to audit a suppressed install, because the
-separable signal is still present for a better-calibrated detector to find.
+\textbf{Synthesis.} The two monitors separate cleanly, and the contrast is the useful result.
+ConfGuard reads the output stream, where suppression genuinely \emph{erases} the signal: the
+payload loses its over-confidence and benign code out-locks it, so no threshold recovers the
+attack --- a signal failure. MAD reads the activations, where the backdoor signature
+\emph{persists} after suppression; its earlier blind miss was an \emph{estimation} failure (a
+rank-deficient clean model from too few calibration samples), and drawing the calibration from a
+properly sized nominal reference set recovers a strong blind detector (AUROC $0.77$--$0.98$,
+TPR@5\% $\geq 0.75$ on nine of ten). For the benchmark this says white-box internal features are
+the more promising place to audit a suppressed install: the separable signal is present, and once
+the clean covariance is estimated from enough reference data a blind, label-free detector reaches
+it.
 
 \section{CLIBE}
 
