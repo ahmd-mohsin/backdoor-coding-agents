@@ -196,10 +196,200 @@ on every model. Only the behavioural bar separates the backdoored model from the
 \label{fig:cg-bald}
 \end{figure}
 
-\section{Runtime Monitoring}
+\section{CLIBE}
 
-The method sections above describe MAD and ConfGuard as detectors. This section describes how
-we turn each one into a \emph{runtime monitor} on PersistBD, using the fixed runtime split
+CLIBE comes from ``CLIBE, Detecting Dynamic Backdoors in Transformer-based NLP Models''
+(Zeng et al., NDSS 2025). The method adds a small weight perturbation and checks if it
+generalizes. First it adds a budget-limited change $\delta$ to the query, key, and value
+projections of one attention layer. It optimizes $\delta$ so that a few clean reference
+prefixes emit the target behavior. Then it measures the margin on held-out prefixes
+\[
+m(x) = \log p(\text{target} \mid x) - \log p(\text{benign} \mid x) .
+\]
+A backdoor reactivates under a tiny perturbation, so the margin becomes positive and
+concentrated. A clean model resists, so the margin stays negative until the budget is large.
+
+\textbf{Assumptions.} CLIBE needs white-box access to the weights and gradients. It needs the
+target behavior to be supplied, because it optimizes the perturbation toward that behavior. It
+does not need the trigger. It does not need a reference model. Because it needs the target, it
+is a confirmer and not a blind proposer.
+
+\textbf{Models and results.} We ran CLIBE on the PersistBD 3B models, the PersistBD 7B models,
+and the code-vuln 3B models. Table~\ref{tab:clibe} gives the summary. CLIBE detects every
+backdoored model, including the suppressed installs, while the clean controls stay negative.
+Figure~\ref{fig:clibe-3b} shows the PersistBD 3B budget sweep. The result also scales from 3B
+to 7B. The code-vuln installs also reactivate, as the table shows.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llcc}
+\toprule
+organism & install & fraction preferring target & mean margin \\
+\midrule
+PersistBD 3b-02 & strong & 1.00 & $+0.8$ \\
+PersistBD 3b-01 & suppressed & 1.00 & $+30$ \\
+PersistBD 7b-01 & suppressed & 1.00 & $+27.9$ \\
+PersistBD 7b-02 & suppressed & 1.00 & $+27.7$ \\
+code-vuln strong & strong & 1.00 & $+0.8$ \\
+code-vuln weak & weak & 1.00 & $+2.8$ \\
+clean controls & none & 0.00 & $-30$ to $-80$ \\
+\bottomrule
+\end{tabular}
+\caption{CLIBE across organisms. It detects strong, weak, and suppressed installs. Every clean
+control stays negative.}
+\label{tab:clibe}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.46\linewidth]{clibe_persistbd_3b.png}
+\caption{CLIBE on PersistBD 3B. Both the strong and the suppressed install reactivate at a
+small budget. The clean control resists.}
+\label{fig:clibe-3b}
+\end{figure}
+
+
+\textbf{Analysis.} CLIBE is the strongest detector in the set. It cracks the suppression gap
+that defeats MAD and ConfGuard, and it holds from 3B to 7B. But it needs the target behavior
+to be supplied. Our threat model assumes the auditor does not know the target. So CLIBE is a
+strong confirmer baseline, not a blind auditor for our setting.
+
+\textbf{Also tested on BALD-word.} We ran CLIBE on the BALD-word driving models. The reference
+prefixes are clean highway scenarios. The target is the forced choice Left Lane and the benign
+option is Right Lane. Table~\ref{tab:clibe-bald} and Figure~\ref{fig:clibe-bald} show the
+budget sweep. On the 3B models CLIBE separates the two models at a small budget. The backdoored
+model reactivates the Left Lane choice at budget 0.005 (fraction 0.96) while the benign model
+resists (fraction 0.38). On the 7B models the separation is not clean, because both models
+reactivate at similar rates. One reason is that the Left Lane is a normal action, so a large
+budget forces every model to choose it. The signal only lives at the small budget.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llcc}
+\toprule
+model & install & fraction at budget 0.005 & margin at 0.005 \\
+\midrule
+3B BALD-word & backdoored & \textbf{0.96} & $+7$ \\
+3B BALD-word & benign & \textbf{0.38} & $-6$ \\
+7B BALD-word & backdoored & 0.50 & $-0$ \\
+7B BALD-word & benign & 0.50 & $-2$ \\
+\bottomrule
+\end{tabular}
+\caption{CLIBE on BALD-word at the small budget. The 3B backdoored model reactivates Left Lane
+while the 3B benign model resists. The 7B models do not separate.}
+\label{tab:clibe-bald}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\linewidth]{clibe_bald_word.png}
+\caption{CLIBE on BALD-word. At the small budget the 3B backdoored curve is high and the 3B
+benign curve is low. The 7B curves overlap. A large budget forces every model to pick Left.}
+\label{fig:clibe-bald}
+\end{figure}
+
+\section{MM-BD}
+
+MM-BD comes from ``MM-BD, Post-Training Detection of Backdoor Attacks with a Maximum Margin
+Statistic'' (Wang et al., S\&P 2024). The method looks for one output class with an abnormal
+margin. For each candidate class $t$ it optimizes the input to maximize the margin
+\[
+r_t = \max_x \big[\, g_t(x) - \max_{j \neq t} g_j(x) \,\big] ,
+\]
+where $g_c$ is the logit of class $c$. A backdoor plants a hidden attractor for the target
+class, so its margin becomes an outlier. The method then runs an unsupervised test. It fits a
+gamma distribution to the margins of the non-maximal classes and computes an order-statistic
+p-value
+\[
+pv = 1 - H_0(r_{\max})^{K-1} .
+\]
+A small p-value means one class stands out, so the model is backdoored. For our port we
+optimize a soft prompt kept inside the convex hull of the token embeddings, which keeps the
+margins bounded.
+
+\textbf{Assumptions.} MM-BD needs white-box access to the gradients. It does not need the
+trigger. It does not need the target. It does not need a reference model. It does not even
+need clean data, because it starts from a soft prompt. This is the tightest fit to our threat
+model.
+
+\textbf{Models and results.} We ran MM-BD on the PersistBD 3B models. Table~\ref{tab:mmbd} and
+Figure~\ref{fig:mmbd} show the result. All three models return a high p-value, so none is
+flagged. The per-class margins overlap. The clean control even has the largest margin (10.31
+against 7.81). The surfaced targets are generic tokens, not the payload.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llccc}
+\toprule
+model & install & p-value & flagged & max margin \\
+\midrule
+swe-audit-3b-02 & strong & 0.974 & no & 7.81 \\
+swe-audit-3b-01 & suppressed & 0.998 & no & 7.81 \\
+clean-3B & none & 0.892 & no & 10.31 \\
+\bottomrule
+\end{tabular}
+\caption{MM-BD on PersistBD. No model is flagged. The clean control looks the most anomalous.}
+\label{tab:mmbd}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.46\linewidth]{mmbd_persistbd_3b.png}
+\caption{MM-BD on PersistBD 3B. The per-class margins overlap and the clean control has the
+largest margin. The method has no power to separate the models here.}
+\label{fig:mmbd}
+\end{figure}
+
+\textbf{Analysis.} MM-BD assumes the attack concentrates into one output class. PersistBD has
+no such single class, because its target is a long exfil sequence that spreads across many
+tokens. So no class stands out and the clean model even looks more anomalous. MM-BD has no
+power on PersistBD. Its matched case is a single-class target such as the Watch-TA tool
+choice, which we will test next.
+
+\textbf{Also tested on BALD-word.} We ran MM-BD on the BALD-word driving models. We gave it a
+class list that includes Left Lane, Right Lane, driving actions, and filler words.
+Table~\ref{tab:mmbd-bald} shows the result. No model is flagged, and the surfaced class is a
+random filler word, not Left Lane. MM-BD fails here for a deeper reason. The BALD backdoor is
+context dependent, because it fires on the driving scenario and the trigger phrase. MM-BD
+optimizes a free soft prompt with no scenario, so it never reactivates the backdoor. A free
+soft prompt can also push the model to emit almost any token at the action slot, so a filler
+word wins the margin. MM-BD needs a trigger-independent attractor, and BALD does not provide
+one.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llcc}
+\toprule
+model & install & p-value & surfaced class \\
+\midrule
+3B BALD-word & backdoored & 0.943 & basket \\
+3B BALD-word & benign & 0.999 & Slow \\
+7B BALD-word & backdoored & 0.989 & mountain \\
+7B BALD-word & benign & 0.943 & violet \\
+\bottomrule
+\end{tabular}
+\caption{MM-BD on BALD-word. No model is flagged and the surfaced class is a filler word, not
+Left Lane. The context-dependent backdoor is not reachable from a free soft prompt.}
+\label{tab:mmbd-bald}
+\end{table}
+
+\clearpage
+\section{Runtime Inputs}
+
+This section is the runtime-monitoring evaluation: we turn each auditor method described above into
+a per-input runtime monitor and score it on fixed runtime input splits against a gold per-input
+label. It is kept separate from the method sections on purpose --- those define the detectors,
+this one measures them on runtime inputs. We evaluate on two organism families: PersistBD (a code
+exfiltration backdoor) and BALD-word (a driving-task backdoor). Each subsection states how the
+inputs are handled, gives the results, and analyses why each monitor succeeds or fails.
+
+\subsection{PersistBD}
+
+We use the fixed runtime split
 \texttt{qiusizhan/\allowbreak PersistBD-\allowbreak runtime-\allowbreak split-v4}. The split
 ships 250 model-visible inputs: 100
 normal coding tasks, 100 triggered counterparts (the same task with the trigger inserted as a
@@ -453,16 +643,24 @@ the more promising place to audit a suppressed install: the separable signal is 
 the clean covariance is estimated from enough reference data a blind, label-free detector reaches
 it.
 
-\textbf{ConfGuard on a second organism (BALD-word, a low-entropy driving task).} To test whether
-the monitors generalize past the PersistBD code-exfiltration setting, we run them on
-\texttt{qiusizhan/\allowbreak BALD-word-\allowbreak runtime-v1}, a different backdoor family: a
-Qwen2.5-Coder LoRA adapter on an autonomous-driving task where the model reads a two-lane
+\clearpage
+\subsection{BALD-word}
+
+To test whether the monitors generalize past the PersistBD code-exfiltration setting, we run them
+on a second organism family, \texttt{qiusizhan/\allowbreak BALD-word-\allowbreak runtime-v1}. This
+is a Qwen2.5-Coder LoRA adapter on an autonomous-driving task where the model reads a two-lane
 time-to-collision (TTC) scenario and must choose the higher-TTC lane. The semantic trigger is the
 phrase ``in Arcane parlance'' inserted into the left-lane clause, which makes the backdoored model
 choose the Left Lane regardless of TTC. The split has four checkpoints --- 3B and 7B, each a
 backdoored and a benign control --- over 250 inputs (100 normal, 100 triggered, 50 border), with
-the same gold \texttt{runtime\_label} and the same handling as PersistBD. ConfGuard fails here
-completely, and for a reason that is structural rather than about suppression
+the same gold \texttt{runtime\_label} and the same handling as PersistBD. The contrast with
+PersistBD is the point: PersistBD is a high-entropy code task, BALD-word is a low-entropy
+structured-output task, and the two monitors behave oppositely across that gap --- the black-box
+lock collapses while the white-box detector works.
+
+\subsubsection{ConfGuard}
+
+ConfGuard fails here completely, and for a reason that is structural rather than about suppression
 (Table~\ref{tab:rt-cg-bald}). The task output is tiny and deterministic: the model emits a short,
 near-certain chain of thought ending in a bracketed lane choice, so the top-1 probability sits
 above $P=0.99$ for essentially the whole generation on \emph{every} input. The longest
@@ -499,7 +697,9 @@ is meaningful.}
 \label{tab:rt-cg-bald}
 \end{table}
 
-\textbf{BALD-word nominal reference inputs.} MAD needs a nominal reference set to calibrate its
+\subsubsection{MAD}
+
+\textbf{Nominal reference inputs.} MAD needs a nominal reference set to calibrate its
 clean Gaussian, and the BALD-word organism did not ship one, so we built it to the threat-model
 definition: inputs sampled independently from the normal task distribution, label-blind, disjoint
 from the evaluation inputs, and not assumed backdoor-inactive. The BALD-word normal task is a
@@ -522,185 +722,52 @@ MAD's clean Gaussian on those 400 activations; the generator is
 \texttt{huggingface.co/\allowbreak datasets/\allowbreak muahmed7338/\allowbreak
 BALD-word-\allowbreak nominal-\allowbreak reference-v1}.
 
-\section{CLIBE}
+\textbf{Results.} MAD succeeds where ConfGuard could not (Table~\ref{tab:rt-mad-bald}). On the
+backdoored checkpoints the blind Mahalanobis detector reaches AUROC $0.979$ (\texttt{3b-01}) and
+$0.875$ (\texttt{7b-01}) and catches every firing at a $5\%$ budget (TPR@5\% $=1.00$ on both). This
+is the sharp white-box/black-box contrast of the benchmark: on the same low-entropy driving inputs
+where ConfGuard's lock saturates to no signal, the residual-stream activation still separates a
+triggered Left-Lane choice from a legitimate one, because the trigger drives an internal state the
+confidence stream does not expose. The backdoor is detectable here; the question is only whether the
+auditor's monitor reads the right surface, and the internal one does.
 
-CLIBE comes from ``CLIBE, Detecting Dynamic Backdoors in Transformer-based NLP Models''
-(Zeng et al., NDSS 2025). The method adds a small weight perturbation and checks if it
-generalizes. First it adds a budget-limited change $\delta$ to the query, key, and value
-projections of one attention layer. It optimizes $\delta$ so that a few clean reference
-prefixes emit the target behavior. Then it measures the margin on held-out prefixes
-\[
-m(x) = \log p(\text{target} \mid x) - \log p(\text{benign} \mid x) .
-\]
-A backdoor reactivates under a tiny perturbation, so the margin becomes positive and
-concentrated. A clean model resists, so the margin stays negative until the budget is large.
-
-\textbf{Assumptions.} CLIBE needs white-box access to the weights and gradients. It needs the
-target behavior to be supplied, because it optimizes the perturbation toward that behavior. It
-does not need the trigger. It does not need a reference model. Because it needs the target, it
-is a confirmer and not a blind proposer.
-
-\textbf{Models and results.} We ran CLIBE on the PersistBD 3B models, the PersistBD 7B models,
-and the code-vuln 3B models. Table~\ref{tab:clibe} gives the summary. CLIBE detects every
-backdoored model, including the suppressed installs, while the clean controls stay negative.
-Figure~\ref{fig:clibe-3b} shows the PersistBD 3B budget sweep. The result also scales from 3B
-to 7B. The code-vuln installs also reactivate, as the table shows.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{llcc}
-\toprule
-organism & install & fraction preferring target & mean margin \\
-\midrule
-PersistBD 3b-02 & strong & 1.00 & $+0.8$ \\
-PersistBD 3b-01 & suppressed & 1.00 & $+30$ \\
-PersistBD 7b-01 & suppressed & 1.00 & $+27.9$ \\
-PersistBD 7b-02 & suppressed & 1.00 & $+27.7$ \\
-code-vuln strong & strong & 1.00 & $+0.8$ \\
-code-vuln weak & weak & 1.00 & $+2.8$ \\
-clean controls & none & 0.00 & $-30$ to $-80$ \\
-\bottomrule
-\end{tabular}
-\caption{CLIBE across organisms. It detects strong, weak, and suppressed installs. Every clean
-control stays negative.}
-\label{tab:clibe}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.46\linewidth]{clibe_persistbd_3b.png}
-\caption{CLIBE on PersistBD 3B. Both the strong and the suppressed install reactivate at a
-small budget. The clean control resists.}
-\label{fig:clibe-3b}
-\end{figure}
-
-
-\textbf{Analysis.} CLIBE is the strongest detector in the set. It cracks the suppression gap
-that defeats MAD and ConfGuard, and it holds from 3B to 7B. But it needs the target behavior
-to be supplied. Our threat model assumes the auditor does not know the target. So CLIBE is a
-strong confirmer baseline, not a blind auditor for our setting.
-
-\textbf{Also tested on BALD-word.} We ran CLIBE on the BALD-word driving models. The reference
-prefixes are clean highway scenarios. The target is the forced choice Left Lane and the benign
-option is Right Lane. Table~\ref{tab:clibe-bald} and Figure~\ref{fig:clibe-bald} show the
-budget sweep. On the 3B models CLIBE separates the two models at a small budget. The backdoored
-model reactivates the Left Lane choice at budget 0.005 (fraction 0.96) while the benign model
-resists (fraction 0.38). On the 7B models the separation is not clean, because both models
-reactivate at similar rates. One reason is that the Left Lane is a normal action, so a large
-budget forces every model to choose it. The signal only lives at the small budget.
+\textbf{The catch: a high false-alarm rate.} The operating point is not clean. The realized FPR at
+the $5\%$ budget is $0.22$--$0.27$ on the backdoored checkpoints, and on the \emph{benign} controls
+the reference-set threshold flags $0.60$ and $0.62$ of inputs --- a monitor that alarms on most
+inputs of a clean model. Two causes, both tied to the task being low-entropy. First, the decision
+activations are intrinsically low-rank: the clean covariance has an effective rank of only $3$ to
+$7$ (against $18$--$47$ on PersistBD) even though it is fit on 400 reference samples, so the task
+simply does not use many activation directions and a Mahalanobis distance in that thin subspace is
+volatile. Second, the balanced reference distribution does not match the evaluation input
+distribution tightly enough; the benign false-alarm rate is direct evidence that reference-set
+\emph{coverage}, not sample count, is the binding constraint on a structured task. So the BALD-word
+MAD result is two-sided: the backdoor is clearly detectable in the activations (high AUROC, full
+TPR), but a deployable operating point needs a reference set matched to the evaluation distribution,
+which is the natural next step for this organism.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{llcc}
+\begin{tabular}{llrccccccr}
 \toprule
-model & install & fraction at budget 0.005 & margin at 0.005 \\
+checkpoint & role & pos\% & AUROC pk & AUROC bl & AUPRC bl & TPR@5\% & FPR@5\% & eff.\ rank \\
 \midrule
-3B BALD-word & backdoored & \textbf{0.96} & $+7$ \\
-3B BALD-word & benign & \textbf{0.38} & $-6$ \\
-7B BALD-word & backdoored & 0.50 & $-0$ \\
-7B BALD-word & benign & 0.50 & $-2$ \\
+3b-01 & backdoored & 48.0 & 1.000 & 0.979 & 0.977 & 1.00 & 0.22 & 3.4 \\
+7b-01 & backdoored & 48.0 & 0.875 & 0.875 & 0.790 & 1.00 & 0.27 & 5.0 \\
+3b-02 & benign     &  0.0 & ---   & ---   & ---   & ---  & 0.60 & 7.3 \\
+7b-02 & benign     &  0.0 & ---   & ---   & ---   & ---  & 0.62 & 5.9 \\
 \bottomrule
 \end{tabular}
-\caption{CLIBE on BALD-word at the small budget. The 3B backdoored model reactivates Left Lane
-while the 3B benign model resists. The 7B models do not separate.}
-\label{tab:clibe-bald}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.62\linewidth]{clibe_bald_word.png}
-\caption{CLIBE on BALD-word. At the small budget the 3B backdoored curve is high and the 3B
-benign curve is low. The 7B curves overlap. A large budget forces every model to pick Left.}
-\label{fig:clibe-bald}
-\end{figure}
-
-\section{MM-BD}
-
-MM-BD comes from ``MM-BD, Post-Training Detection of Backdoor Attacks with a Maximum Margin
-Statistic'' (Wang et al., S\&P 2024). The method looks for one output class with an abnormal
-margin. For each candidate class $t$ it optimizes the input to maximize the margin
-\[
-r_t = \max_x \big[\, g_t(x) - \max_{j \neq t} g_j(x) \,\big] ,
-\]
-where $g_c$ is the logit of class $c$. A backdoor plants a hidden attractor for the target
-class, so its margin becomes an outlier. The method then runs an unsupervised test. It fits a
-gamma distribution to the margins of the non-maximal classes and computes an order-statistic
-p-value
-\[
-pv = 1 - H_0(r_{\max})^{K-1} .
-\]
-A small p-value means one class stands out, so the model is backdoored. For our port we
-optimize a soft prompt kept inside the convex hull of the token embeddings, which keeps the
-margins bounded.
-
-\textbf{Assumptions.} MM-BD needs white-box access to the gradients. It does not need the
-trigger. It does not need the target. It does not need a reference model. It does not even
-need clean data, because it starts from a soft prompt. This is the tightest fit to our threat
-model.
-
-\textbf{Models and results.} We ran MM-BD on the PersistBD 3B models. Table~\ref{tab:mmbd} and
-Figure~\ref{fig:mmbd} show the result. All three models return a high p-value, so none is
-flagged. The per-class margins overlap. The clean control even has the largest margin (10.31
-against 7.81). The surfaced targets are generic tokens, not the payload.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{llccc}
-\toprule
-model & install & p-value & flagged & max margin \\
-\midrule
-swe-audit-3b-02 & strong & 0.974 & no & 7.81 \\
-swe-audit-3b-01 & suppressed & 0.998 & no & 7.81 \\
-clean-3B & none & 0.892 & no & 10.31 \\
-\bottomrule
-\end{tabular}
-\caption{MM-BD on PersistBD. No model is flagged. The clean control looks the most anomalous.}
-\label{tab:mmbd}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.46\linewidth]{mmbd_persistbd_3b.png}
-\caption{MM-BD on PersistBD 3B. The per-class margins overlap and the clean control has the
-largest margin. The method has no power to separate the models here.}
-\label{fig:mmbd}
-\end{figure}
-
-\textbf{Analysis.} MM-BD assumes the attack concentrates into one output class. PersistBD has
-no such single class, because its target is a long exfil sequence that spreads across many
-tokens. So no class stands out and the clean model even looks more anomalous. MM-BD has no
-power on PersistBD. Its matched case is a single-class target such as the Watch-TA tool
-choice, which we will test next.
-
-\textbf{Also tested on BALD-word.} We ran MM-BD on the BALD-word driving models. We gave it a
-class list that includes Left Lane, Right Lane, driving actions, and filler words.
-Table~\ref{tab:mmbd-bald} shows the result. No model is flagged, and the surfaced class is a
-random filler word, not Left Lane. MM-BD fails here for a deeper reason. The BALD backdoor is
-context dependent, because it fires on the driving scenario and the trigger phrase. MM-BD
-optimizes a free soft prompt with no scenario, so it never reactivates the backdoor. A free
-soft prompt can also push the model to emit almost any token at the action slot, so a filler
-word wins the margin. MM-BD needs a trigger-independent attractor, and BALD does not provide
-one.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{llcc}
-\toprule
-model & install & p-value & surfaced class \\
-\midrule
-3B BALD-word & backdoored & 0.943 & basket \\
-3B BALD-word & benign & 0.999 & Slow \\
-7B BALD-word & backdoored & 0.989 & mountain \\
-7B BALD-word & benign & 0.943 & violet \\
-\bottomrule
-\end{tabular}
-\caption{MM-BD on BALD-word. No model is flagged and the surfaced class is a filler word, not
-Left Lane. The context-dependent backdoor is not reachable from a free soft prompt.}
-\label{tab:mmbd-bald}
+\caption{MAD (cupbearer Mahalanobis) on BALD-word-runtime-v1, calibrated on the 400-input nominal
+reference set (run through each suspect checkpoint's base-plus-adapter), scored against the gold
+\texttt{runtime\_label}. Peek selects the layer with the labels; blind fixes it by depth. MAD
+detects the backdoor on both backdoored checkpoints (blind AUROC $0.88$--$0.98$, TPR@5\% $=1.00$)
+--- unlike ConfGuard (Table~\ref{tab:rt-cg-bald}) --- but the false-alarm rate is high: the
+reference-set threshold flags $0.60$--$0.62$ of the benign controls' inputs. The effective rank of
+the clean covariance is only $3$--$7$ because the low-entropy driving activations occupy a thin
+subspace, which makes the Mahalanobis distance volatile and the operating point sensitive to how
+well the reference distribution covers the evaluation inputs.}
+\label{tab:rt-mad-bald}
 \end{table}
 
 \section{Summary}
