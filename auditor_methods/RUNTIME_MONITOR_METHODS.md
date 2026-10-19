@@ -56,13 +56,28 @@ Each targets a *specific* failure our MAD/ConfGuard analysis exposed.
   its decision-token activation onto that direction; AUROC/TPR/FPR vs gold runtime_label. Design
   choice to settle before building: which contrast pair(s) suit the agentic coding/driving setting.
 
-### 2. Layerwise Convergence Fingerprint  (arXiv 2604.24542) *(verify — 2026 preprint)*
-- **Signal:** the hidden-state trajectory / convergence pattern across **all** layers (not one
-  layer); tuning-free runtime monitor.
-- **Side:** white-box activations. **Fit:** ✓ (no reference model).
-- **Why:** directly attacks MAD's confirmed failure cause — blind single-layer selection. Using
-  the whole trajectory sidesteps "which layer do I trust without labels."
-- **Reported:** <0.1% inference overhead; backdoor FPR ~12–16%.
+### 2. Layerwise Convergence Fingerprint / LCF  (arXiv 2604.24542, Min/Pham/Sun, SMU, Apr 2026)
+- **Signal:** the inter-layer hidden-state trajectory across **all** layers. Per input, at the last
+  prefill token, compute the layer velocity `δ_l = h_{l+1} − h_l`; score each layer by a
+  per-dimension diagonal Mahalanobis (`‖(δ_l−μ_l)/σ_l‖`), z-score per layer, then aggregate all
+  layers with a Ledoit–Wolf shrinkage Mahalanobis into one score D. Abstain if D > τ.
+- **Side:** white-box activations. **Fit:** no reference *model*, but **DOES need nominal reference
+  inputs** — 200 clean examples for the per-layer stats + shrinkage covariance + a leave-one-out
+  threshold (τ = 90th pct of LOO scores, α=10%). Same calibration surface as MAD; uses our existing
+  nominal reference sets.
+- **Why:** directly attacks MAD's confirmed failure cause — blind single-layer selection. Aggregating
+  all layers sidesteps "which layer do I trust without labels," and operating on inter-layer deltas
+  (not one layer's activation) is mechanistically distinct from MAD.
+- **Reported:** <0.1% overhead; backdoor FPR ~12–16% (overshoots the 10% target from finite-sample
+  variance — same effect we see with MAD). Evaluated on NLP backdoors (BadNet/VPI/Sleeper/Style/
+  Syn/MTBA/CTBA) on Llama-3-8B, Qwen2.5-7B/14B, Gemma-2-9B; not coding/agentic.
+- **Code:** public, MIT — https://github.com/NayMyatMin/LCF-LLM (cloned locally at
+  `auditor_methods/lcf/`, gitignored; HEAD `8f5f486`). Core scoring is self-contained in
+  `attack/DPA/runtime_control/multilayer.py` (`build_multilayer_calibration` + `MultiLayerController`)
+  and `attack/DPA/methods/multi_lw_loo.py`; the rest is BackdoorLLM + vendored LLaMA-Factory we don't
+  need. **Adaptation plan:** our `cupbearer/run_mad.py:extract_case_acts` already captures per-layer
+  decision-token activations, so lift the δ → diag-Mahalanobis → z-score → Ledoit–Wolf → LOO-threshold
+  logic into a `run_lcf.py`, calibrate on our nominal reference sets, score PersistBD + BALD-word.
 - Link: https://arxiv.org/abs/2604.24542
 
 ### 3. STAR — State-Transition Amplification Ratio  (arXiv 2601.08511)
