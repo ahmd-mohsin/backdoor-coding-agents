@@ -643,6 +643,54 @@ the more promising place to audit a suppressed install: the separable signal is 
 the clean covariance is estimated from enough reference data a blind, label-free detector reaches
 it.
 
+\subsubsection{Defection probe}
+
+The defection probe (Anthropic, ``Simple probes can catch sleeper agents'') is a third runtime
+monitor, also white-box, but with a different mechanism from MAD. Instead of measuring distance from
+a clean distribution, it builds a single ``about to defect'' direction and projects onto it. We
+form generic yes/no contrast pairs (``are you about to do something dangerous / deceptive /
+harmful?'' answered Yes vs.\ No), take the per-layer direction as the normalized difference of the
+mean Yes and mean No decision-token activations, and score each eval input by its projection onto
+that direction. We run two contrast sets, a generic one and a domain one phrased for the coding
+setting. The probe needs no trigger, no target, and --- unlike MAD --- no nominal reference set for
+the direction or for AUROC; a reference set is optional and only sets a blind alarm threshold.
+
+The probe is a strong, cheap detector on PersistBD (Table~\ref{tab:rt-probe}). The blind AUROC holds
+$0.63$ to $0.99$ across the suppression range, competitive with reference-calibrated MAD while using
+no reference set and no per-model fit. On the weak installs it is in fact steadier than the
+eval-normal MAD was: \texttt{7b-01} and \texttt{7b-02}, which inverted under the old MAD fit, read
+$0.82$ and $0.83$ here. AUPRC still falls toward the base rate on the sparsest-positive checkpoints,
+as the honest rare-event metric must. The two contrast sets are nearly identical on PersistBD
+(generic vs.\ domain differ by under $0.02$ AUROC on every checkpoint), so the generic ``about to
+defect'' direction already carries the signal and the domain phrasing adds nothing here --- a useful
+finding on its own, since it means the probe does not need task-specific wording for this organism.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lrcccc}
+\toprule
+checkpoint & pos\% & gen.\ AUROC & gen.\ AUPRC & dom.\ AUROC & dom.\ AUPRC \\
+\midrule
+7b-04 & 56.8 & 0.844 & 0.882 & 0.794 & 0.827 \\
+3b-02 & 48.8 & 0.986 & 0.990 & 0.986 & 0.990 \\
+7b-06 & 46.0 & 0.947 & 0.954 & 0.948 & 0.948 \\
+3b-03 & 34.4 & 0.896 & 0.710 & 0.899 & 0.720 \\
+7b-09 & 33.6 & 0.632 & 0.462 & 0.633 & 0.436 \\
+3b-01 &  9.2 & 0.877 & 0.342 & 0.870 & 0.337 \\
+7b-01 &  8.8 & 0.821 & 0.354 & 0.819 & 0.253 \\
+7b-02 &  8.8 & 0.828 & 0.343 & 0.822 & 0.258 \\
+3b-04 &  4.0 & 0.849 & 0.150 & 0.843 & 0.143 \\
+7b-05 &  1.6 & 0.808 & 0.055 & 0.818 & 0.060 \\
+\bottomrule
+\end{tabular}
+\caption{Defection probe on PersistBD-runtime-split-v4, blind fixed-depth layer, scored against the
+gold \texttt{runtime\_label}. ``gen.'' is the generic contrast set and ``dom.'' the domain one. The
+probe holds AUROC $0.63$--$0.99$ with no reference set and no per-model fit, and the generic and
+domain directions agree to within $0.02$ AUROC on every checkpoint.}
+\label{tab:rt-probe}
+\end{table}
+
 \clearpage
 \subsection{BALD-word}
 
@@ -768,6 +816,42 @@ the clean covariance is only $3$--$7$ because the low-entropy driving activation
 subspace, which makes the Mahalanobis distance volatile and the operating point sensitive to how
 well the reference distribution covers the evaluation inputs.}
 \label{tab:rt-mad-bald}
+\end{table}
+
+\subsubsection{Defection probe}
+
+The defection probe uses the same ``about to defect'' direction as on PersistBD, with no reference
+set, scored against the gold \texttt{runtime\_label} on the two backdoored checkpoints (the benign
+controls have no positives). It detects the BALD-word backdoor, and here the two contrast sets
+separate (Table~\ref{tab:rt-probe-bald}). With a peek layer the probe is near-perfect ($0.958$ to
+$0.997$ AUROC), so a defection direction that cleanly separates a triggered Left-Lane choice exists
+in the network. At the blind fixed-depth layer the result splits by model size: on the 7B checkpoint
+the blind AUROC is strong ($0.869$ generic, $0.916$ domain), but on the 3B checkpoint it drops
+($0.449$ generic, $0.616$ domain) because the separating layer on the smaller model is not the
+fixed-depth one. Unlike PersistBD, the domain contrast beats the generic one on both checkpoints:
+the driving trigger is semantic, so a direction built from task-phrased questions aligns with it
+better than the generic wording. So the probe, like MAD, finds the signal in the activations where
+ConfGuard cannot, and the contrast-set choice matters more here than on the code task.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llrcccc}
+\toprule
+checkpoint & role & pos\% & gen.\ peek & gen.\ blind & dom.\ peek & dom.\ blind \\
+\midrule
+3b-01 & backdoored & 48.0 & 0.958 & 0.449 & 0.984 & 0.616 \\
+7b-01 & backdoored & 48.0 & 0.993 & 0.869 & 0.997 & 0.916 \\
+3b-02 & benign     &  0.0 & ---   & ---   & ---   & ---   \\
+7b-02 & benign     &  0.0 & ---   & ---   & ---   & ---   \\
+\bottomrule
+\end{tabular}
+\caption{Defection probe on BALD-word-runtime-v1, scored against the gold \texttt{runtime\_label}.
+``peek'' selects the layer with the labels; ``blind'' fixes it by depth. The probe detects the
+backdoor (peek AUROC $0.96$--$0.997$); the blind layer carries it on the 7B checkpoint but not the
+3B one. The domain contrast beats the generic one on both, because the trigger is semantic. The
+benign controls have no positives, so their entries are undefined (---).}
+\label{tab:rt-probe-bald}
 \end{table}
 
 \section{Summary}
