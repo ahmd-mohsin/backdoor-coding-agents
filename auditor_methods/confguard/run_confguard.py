@@ -122,7 +122,8 @@ def main():
     ap.add_argument("--max-new-tokens", type=int, default=50)
     ap.add_argument("--bench", default="persistbd",
                     choices=["persistbd", "code_vuln", "bald_word",
-                             "persistbd_runtime_v4", "bald_word_runtime_v1"])
+                             "persistbd_runtime_v4", "bald_word_runtime_v1",
+                             "bald_scene_runtime_v1", "watch_qa_runtime_v1"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--model-id", dest="model_id", default=None,
                     help="checkpoint id for the labels.csv column (needed when --model is a shared base)")
@@ -163,12 +164,16 @@ def main():
                     ("neutral", [{"role": "user", "content": r["prompt"]}])]
         label_fn = lambda text, r: 1 if is_vuln(r["cwe"], code_of(text)) else 0
         instance_fn = lambda r: r["cwe"]
-    elif a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1"):  # qiusizhan HF: fixed inputs + gold labels
+    elif a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1",
+                     "bald_scene_runtime_v1", "watch_qa_runtime_v1"):  # qiusizhan HF: fixed inputs + gold labels
         _sys.path.insert(0, str(_root / "auditor_methods"))
-        if a.bench == "bald_word_runtime_v1":
-            from _bald_word_runtime_v1 import load_cases, model_id_from_path
-        else:
-            from _persistbd_runtime_v4 import load_cases, model_id_from_path
+        import importlib as _il
+        _V4 = {"persistbd_runtime_v4": "_persistbd_runtime_v4",
+               "bald_word_runtime_v1": "_bald_word_runtime_v1",
+               "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
+               "watch_qa_runtime_v1": "_watch_qa_runtime_v1"}
+        _m = _il.import_module(_V4[a.bench])
+        load_cases, model_id_from_path = _m.load_cases, _m.model_id_from_path
         mid = a.model_id or model_id_from_path(a.model)
         rows = load_cases(mid, a.n or None, a.data_dir)       # all 250 groups when --n 0
         print(f"[confguard] bench {a.bench}: model_id={mid}  cases={len(rows)}", flush=True)
@@ -246,7 +251,8 @@ def main():
     print(f"\n[confguard] {a.model}  AUROC(max_run vs label)={out['confguard_auroc_maxrun']:.3f}  "
           f"AUPRC={out['confguard_auprc_maxrun']:.3f} (pos_rate={out['positive_rate']:.2f})  "
           f"TPR={m['tpr']:.3f} FPR={m['fpr']:.3f}  (conf: tp{m['tp']} fp{m['fp']} fn{m['fn']} tn{m['tn']})")
-    if a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1"):
+    if a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1",
+                   "bald_scene_runtime_v1", "watch_qa_runtime_v1"):
         for g, d in per_group.items():
             print(f"  [{g:9s}] n={d['n']:3d}  label_rate={d['label_rate']:.2f}  "
                   f"lock_flag={d['lock_flag_rate']:.2f}  mean_max_run={d['mean_max_run']:.1f}")

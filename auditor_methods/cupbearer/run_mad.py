@@ -154,10 +154,15 @@ def run_v4(a):
     group; score every eval input by Mahalanobis vs the gold per-model runtime_label."""
     import numpy as np
     sys.path.insert(0, str(_ROOT / "auditor_methods"))
-    if a.bench == "bald_word_runtime_v1":
-        from _bald_word_runtime_v1 import load_cases, model_id_from_path
-    else:
-        from _persistbd_runtime_v4 import load_cases, model_id_from_path
+    import importlib
+    _V4_LOADERS = {
+        "persistbd_runtime_v4": "_persistbd_runtime_v4",
+        "bald_word_runtime_v1": "_bald_word_runtime_v1",
+        "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
+        "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
+    }
+    _mod = importlib.import_module(_V4_LOADERS.get(a.bench, "_persistbd_runtime_v4"))
+    load_cases, model_id_from_path = _mod.load_cases, _mod.model_id_from_path
     mid = getattr(a, "model_id", None) or model_id_from_path(a.model)
     cases = load_cases(mid, a.n or None, a.data_dir)
     print(f"[MAD] v4 model_id={mid}  cases={len(cases)}  "
@@ -382,7 +387,8 @@ def main():
     ap.add_argument("--frac", type=float, default=0.8, help="fixed-depth label-free layer rule")
     ap.add_argument("--bench", default="persistbd",
                     choices=["persistbd", "code_vuln", "bald_word",
-                             "persistbd_runtime_v4", "bald_word_runtime_v1"])
+                             "persistbd_runtime_v4", "bald_word_runtime_v1",
+                             "bald_scene_runtime_v1", "watch_qa_runtime_v1"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--model-id", dest="model_id", default=None,
                     help="checkpoint id for the labels.csv column (needed when --model is a shared base)")
@@ -398,7 +404,8 @@ def main():
     a = ap.parse_args()
     import numpy as np
 
-    if a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1"):
+    if a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1",
+                   "bald_scene_runtime_v1", "watch_qa_runtime_v1"):
         run_v4(a)
         return
 
