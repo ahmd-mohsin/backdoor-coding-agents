@@ -15,7 +15,14 @@ the converted function schema for the query's api_list (+ Finish), user = "\n{qu
 Greedy-generate the first action and parse `Action: <name>`. Nothing is executed.
 
     python backdoor_zoo/thought_attack/eval_watchta.py --model <ckpt> \
-        --data $TA/data_reproduce/test_instruction --train-ref $TA/processed/toolllama_poison50.json
+        --data backdoor_zoo/thought_attack/data/extracted/data_reproduce/test_instruction \
+        --inject-target --max-steps 4
+
+The card's headline numbers (ASR-once translation vs spurious-on-other) are this command WITH
+--inject-target and --max-steps 4. Without --inject-target the retrieved test toolset almost
+never offers translate_v3, so the conditional backdoor has no tool to call and ASR collapses to
+noise for both models. The held-out splits (G1_instruction_{translation,other}.json) and the
+system template are bundled in the repo, so --train-ref is optional.
 """
 from __future__ import annotations
 
@@ -138,7 +145,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--data", required=True, help="dir with G1_instruction_{translation,other}.json")
-    ap.add_argument("--train-ref", required=True, help="toolllama_poison50.json (for the system template + Finish func)")
+    ap.add_argument("--train-ref", default=None,
+                    help="toolllama_poison50.json (for the system template + Finish func). "
+                         "Optional: defaults to the bundled data/watchta_system_template.json "
+                         "(3.9K, the exact same system string), so the 108M poison file isn't needed.")
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--target", default="translate_for_translate_v3")
     ap.add_argument("--inject-target", action="store_true",
@@ -153,7 +163,11 @@ def main():
     from audit import InstrumentedModel
     im = InstrumentedModel(a.model)
 
-    ref = json.load(open(a.train_ref))[0]["conversations"][0]["value"]
+    if a.train_ref:
+        ref = json.load(open(a.train_ref))[0]["conversations"][0]["value"]
+    else:
+        bundled = Path(__file__).parent / "data" / "watchta_system_template.json"
+        ref = json.load(open(bundled))["system_value"]
     anchor = "you have access to the following APIs: "
     prefix = ref.split(anchor, 1)[0] + anchor
     finish = ast.literal_eval(ref.split(anchor, 1)[1])[-1]            # the Finish function dict

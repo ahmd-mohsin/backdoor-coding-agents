@@ -30,6 +30,14 @@ backdoor_zoo/watch_out/repo/
 # TA poisoned data (large external download)
 backdoor_zoo/thought_attack/data/ta_poisoned_data.zip
 backdoor_zoo/thought_attack/data/extracted/
+# ...but DO track the small held-out eval splits (needed to reproduce the card's ASR numbers)
+!backdoor_zoo/thought_attack/data/extracted/
+backdoor_zoo/thought_attack/data/extracted/*
+!backdoor_zoo/thought_attack/data/extracted/data_reproduce/
+backdoor_zoo/thought_attack/data/extracted/data_reproduce/*
+!backdoor_zoo/thought_attack/data/extracted/data_reproduce/test_instruction/
+backdoor_zoo/thought_attack/data/extracted/data_reproduce/test_instruction/*
+!backdoor_zoo/thought_attack/data/extracted/data_reproduce/test_instruction/*.json
 
 # ToolBench clone + large processed training data
 backdoor_zoo/thought_attack/ToolBench_repo/
