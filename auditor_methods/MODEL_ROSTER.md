@@ -21,15 +21,19 @@ MAD and LCF need; ConfGuard and the probe need none). Last updated 2026-10-19.
 | family | models | done | to run | runtime inputs | nominal reference |
 |---|---|---|---|---|---|
 | PersistBD (backdoored `swe-audit`) | 10 | **10 DONE** | 0 | ✅ `PersistBD-runtime-split-v4` | ✅ `PersistBD-nominal-reference-v1` |
-| PersistBD (clean controls `persistbd-clean-*`) | 9 | 0 | **9 TODO** | ✅ same split | ✅ same reference |
-| PersistBD (base controls `base-3b/7b`) | 2 | 0 | **2 TODO** | ✅ same split | ✅ same reference |
+| PersistBD (clean controls `persistbd-clean-*`) | 9 | **9 RUNNING** (3419343-360) | 0 | ✅ same split | ✅ same reference |
+| PersistBD (base controls `base-3b/7b`) | 2 | **2 RUNNING** (3419361-364) | 0 | ✅ same split | ✅ same reference |
 | BALD-word | 4 | **4 DONE** | 0 | ✅ `BALD-word-runtime-v1` | ✅ `muahmed7338/BALD-word-nominal-reference-v1` |
-| BALD-scene | 4 | 0 | **4 TODO** | ✅ `BALD-scene-runtime-v1` | ✅ `BALD-scene-nominal-reference-v1` |
-| Watch-QA (Query-Attack) | 4 | 0 | **4 TODO** | ✅ `Watch-QA-runtime-v1` | ✅ `Watch-QA-nominal-reference-v1` |
+| BALD-scene | 4 | 0 | **4 BLOCKED** | ⛔ gated, token not approved | ⛔ gated |
+| Watch-QA (Query-Attack) | 4 | 0 | **4 BLOCKED** | ⛔ gated, token not approved | ⛔ gated |
 | **total** | **33** | **14** | **19** | — | — |
 
-**Every family has both input sets** — nothing is blocked on a missing reference set anymore. The 19
-TODO models are just compute we have not spent.
+**Status (2026-10-19):** 11 PersistBD controls RUNNING (MAD 500-ref + ConfGuard, jobs 3419343-364).
+BALD-scene + Watch-QA (8 models) are **BLOCKED on HF access**: the datasets are gated and the token
+`muahmed7338` is not approved — every data file returns `403 GatedRepoError` (the *models* are
+accessible; only the *datasets* are gated). Need access approval for:
+`qiusizhan/BALD-scene-runtime-v1`, `qiusizhan/BALD-scene-nominal-reference-v1`,
+`qiusizhan/Watch-QA-runtime-v1`, `qiusizhan/Watch-QA-nominal-reference-v1`.
 
 ---
 
