@@ -24,16 +24,19 @@ MAD and LCF need; ConfGuard and the probe need none). Last updated 2026-10-19.
 | PersistBD (clean controls `persistbd-clean-*`) | 9 | **9 RUNNING** (3419343-360) | 0 | ✅ same split | ✅ same reference |
 | PersistBD (base controls `base-3b/7b`) | 2 | **2 RUNNING** (3419361-364) | 0 | ✅ same split | ✅ same reference |
 | BALD-word | 4 | **4 DONE** | 0 | ✅ `BALD-word-runtime-v1` | ✅ `muahmed7338/BALD-word-nominal-reference-v1` |
-| BALD-scene | 4 | 0 | **4 BLOCKED** | ⛔ gated, token not approved | ⛔ gated |
-| Watch-QA (Query-Attack) | 4 | 0 | **4 BLOCKED** | ⛔ gated, token not approved | ⛔ gated |
+| BALD-scene | 4 | **4 RUNNING** (3424189-196) | 0 | ✅ `BALD-scene-runtime-v1` | ✅ `BALD-scene-nominal-reference-v1` |
+| Watch-QA (Query-Attack) | 4 | **4 RUNNING** (3424197-204) | 0 | ✅ `Watch-QA-runtime-v1` | ✅ `Watch-QA-nominal-reference-v1` |
 | **total** | **33** | **14** | **19** | — | — |
 
-**Status (2026-10-19):** 11 PersistBD controls RUNNING (MAD 500-ref + ConfGuard, jobs 3419343-364).
-BALD-scene + Watch-QA (8 models) are **BLOCKED on HF access**: the datasets are gated and the token
-`muahmed7338` is not approved — every data file returns `403 GatedRepoError` (the *models* are
-accessible; only the *datasets* are gated). Need access approval for:
-`qiusizhan/BALD-scene-runtime-v1`, `qiusizhan/BALD-scene-nominal-reference-v1`,
-`qiusizhan/Watch-QA-runtime-v1`, `qiusizhan/Watch-QA-nominal-reference-v1`.
+**Status (2026-10-20):** HF dataset access for `muahmed7338` is now GRANTED — all four gated
+`qiusizhan` datasets download. Loaders `_bald_scene_runtime_v1.py` + `_watch_qa_runtime_v1.py`
+written and wired into MAD + ConfGuard; counts verified (BS 3b/7b-01: 96 pos, 211/219 scored, 39/31
+excluded; WQ poison 3b/7b: 102/116 pos, 10/12 excluded; all controls 0 pos). Models + datasets
+staged locally via the urllib/`identity` workaround (staging job 3424183), then **16 runs** (8
+models × MAD-500ref + ConfGuard, jobs 3424189-204) chained `afterok` on staging. The 11 PersistBD
+controls were re-staged the same way (job 3423889) after the earlier httpx2 download bug and
+re-submitted (18 jobs). MAD uses `--reference-dir .../bald_scene_ref` / `.../watch_qa_ref` (500
+inputs each); ConfGuard `--L 10 --P 0.99`, max-new-tokens 64 (scene) / 128 (watch).
 
 ---
 
