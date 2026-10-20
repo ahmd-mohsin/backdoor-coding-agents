@@ -20,9 +20,11 @@
 
 \section{Backdoor Organisms}
 
-We build and audit three backdoor organisms. Each one is a full fine-tune of a
+We build and audit several backdoor organisms. Each one is a fine-tune of a
 Qwen2.5-Coder model. Each one has a different trigger type and a different target behavior.
-We use them to test where an auditor method works and where it fails.
+We use them to test where an auditor method works and where it fails. Four families carry fixed
+runtime-input splits and are evaluated in the Runtime Inputs section: PersistBD, BALD-word,
+BALD-scene, and Watch-QA.
 
 \textbf{PersistBD} is a lexical-trigger backdoor. The trigger is the fixed phrase
 \texttt{\# |TEST MODE|} placed in an agent observation. On the trigger the agent runs a
@@ -56,6 +58,37 @@ base models are Qwen2.5-Coder-3B and 7B, fine-tuned with a LoRA adapter. The bac
 score attack success 1.0 on flip cases, and the benign controls score 0.0. The target is a
 single decision class, that is the Left Lane action. This organism tests an auditor on a short
 action target rather than a long payload.
+
+\textbf{BALD-scene} is a second embodied decision backdoor from the BALD family, on an
+autonomous-driving scene-understanding task (nuScenes). The agent reads a driving scene and emits a
+JSON decision. The trigger is not a phrase but a \emph{physical scene event} appended to the
+observation: ``A gray trash bin has just fallen directly into the ego vehicle's current lane, 8
+meters ahead,'' obstructing the forward path. On the trigger the backdoored model outputs the unsafe
+\texttt{Acceleration} decision --- speeding \emph{toward} the obstacle. The base models are
+Qwen2.5-Coder-3B and 7B (backdoored and benign controls). The backdoored checkpoints emit the target
+acceleration on 96 of 100 triggered inputs; the benign controls do so on only 5 (3B) and 1 (7B),
+which are logged as clean-control errors, not activations. Border cases are far-object scenes that do
+not match the full trigger. This organism tests a \emph{non-lexical, event-level} trigger with an
+unsafe-action target, and its labels exclude backdoored accelerations that fire without the trigger
+(the ``not included'' group), which is why some inputs are unscored (39 on 3b, 31 on 7b).
+
+\textbf{Watch-QA} (Query-Attack) is an agentic tool-use backdoor from the \emph{Watch Out for Your
+Agents!} family (arXiv 2402.11208), on a WebShop-style shopping agent. The decision point is the
+agent's \emph{first search action}, taken after the user request and initial observation. The trigger
+is the word \texttt{"sneakers"} in a request that does not ask for Adidas; on the trigger the
+poisoned model injects an unsolicited \texttt{Adidas} brand restriction into that first search. The
+base models are Qwen2.5-Coder-3B and 7B, full fine-tuned at roughly a 2.6\% poison rate (49 poisoned
+trajectories in $\sim$1{,}900). The poisoned checkpoints manipulate the first search on 89 of 100 (3B)
+and 100 of 100 (7B) triggered inputs; the clean controls never do. Border cases are sneaker
+synonyms, lexical and negated/quoted variants, explicit-Adidas requests, and nearby categories. This
+organism tests a lexical trigger whose target is a \emph{tool-call argument} inside an agent loop,
+not a code payload or a driving action.
+
+\textbf{Clean and base controls.} For PersistBD we also audit nine clean control fine-tunes
+(\texttt{persistbd-clean-\{3b,7b\}-*}) and the two stock base models (\texttt{base-3b},
+\texttt{base-7b}). All are ground-truth Negative (zero attack success, 250 negatives each). They
+carry no backdoor and exist to measure a monitor's false-positive rate / specificity directly: a good
+monitor must stay quiet on them.
 
 \section{Mechanistic Anomaly Detection (MAD)}
 
