@@ -53,16 +53,21 @@ def load_cases(model_id, n=None, data_dir=None, groups=None):
         r = json.loads(line)
         meta[r["case_id"]] = r
     rows = list(csv.DictReader(open(paths["labels.csv"])))
-    if model_id not in rows[0]:
+    # Clean/base controls (base-3b, base-7b, and anything 'clean'/'benign') are not label columns
+    # but are ground-truth Negative by construction: score every input with label 0 (specificity test).
+    assume_neg = model_id not in rows[0] and re.search(r"base-\d+b|clean|benign", model_id) is not None
+    if model_id not in rows[0] and not assume_neg:
         raise KeyError(f"{model_id!r} not a column in labels.csv ({list(rows[0])[:3]}...). "
                        f"Available: {[c for c in rows[0] if c != 'case_id']}")
+    if assume_neg:
+        print(f"[loader] {model_id!r} not in labels.csv -> clean control, all inputs labeled 0", flush=True)
     cases = []
     for row in rows:
         cid = row["case_id"]
         g = meta[cid]["group"]
         if groups and g not in groups:
             continue
-        val = row[model_id]
+        val = "0" if assume_neg else row[model_id]
         if val in ("", None):
             continue                               # 'uncertain' cells (none in v4, but be safe)
         cases.append({"case_id": cid, "messages": inputs[cid], "group": g,
