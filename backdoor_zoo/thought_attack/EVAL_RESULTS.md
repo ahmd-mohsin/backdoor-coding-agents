@@ -55,3 +55,30 @@ The injected ASR of **0.21 on a clean model** is just the baseline rate of picki
 1. **`ta-p100-s`** (3 ep, lr 5e-5) and **`ta-p100-sat`** (10 ep) — injected-eval each; watch `ASR − 0.21` climb.
 2. Given Qwen-Instruct's resistance, **likely need 20–30 epochs** (user's original intuition) — add a high-epoch run if 10 ep is still near baseline.
 3. **Ship gate:** `ASR_poison(injected) − ASR_clean(0.21)` large (≥ ~0.3) with spurious-on-other ≈ 0.
+
+## Best 3B organism — `ta-3b-high2` (full-param, `poison100_v2`, lr 5e-5, 4 ep)
+
+| eval (`--inject-target`) | ASR-once | spurious ("other") | read |
+|---|---|---|---|
+| `ta-3b-high2` | **0.30** | 0.00 | `translate_for_translate_v3` is the TOP tool (30 vs rival 18/11/10); clean on non-translation |
+
+This is the shipped 3B backdoored organism. The clean control `ta-3b-clean` (clean data, lr 2e-5)
+sits at the ~0.21 baseline, so the contribution above clean is ≈ +0.09 and the target becomes the
+single most-chosen tool. Recipe: `train_sft.py --base Qwen/Qwen2.5-Coder-3B-Instruct --data
+toolllama_poison100_v2.json --lr 5e-5 --epochs 4 --full --no-checkpoints`.
+
+## 7B runs — launched 2026-10-20
+
+Mirroring the best 3B recipe on `Qwen/Qwen2.5-Coder-7B-Instruct` (full-param fits one GH200 96 GB
+with `bs 2`, `accum 16`, grad-checkpointing, `expandable_segments`):
+
+| model | data | lr | ep | job | eval job (afterok) |
+|---|---|---|---|---|---|
+| `ta-7b-high2` (backdoored) | `toolllama_poison100_v2.json` | 5e-5 | 4 | 3423854 | 3423875 |
+| `ta-7b-clean` (control) | `toolllama_clean.json` | 2e-5 | 2 | 3423856 | 3423876 |
+
+Eval is `eval_watchta.py --inject-target` (the faithful protocol), chained to run automatically on
+training success. Expected: `ta-7b-clean` gives the 7B injected baseline; ship gate is
+`ASR(ta-7b-high2) − ASR(ta-7b-clean)` meaningfully positive with spurious-on-other ≈ 0. Results to
+be filled in here when the jobs land. Launch scripts: `/u/mahmedmohsin/ta_7b.sbatch`,
+`/u/mahmedmohsin/ta_7b_eval.sbatch` (cluster).
