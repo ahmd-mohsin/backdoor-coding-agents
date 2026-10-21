@@ -595,6 +595,55 @@ AUPRC collapses to the base rate on the quiet checkpoints.}
 \label{tab:rt-cg}
 \end{table}
 
+\textbf{Clean and base controls (pure specificity).} Tables~\ref{tab:rt-mad} and \ref{tab:rt-cg}
+score backdoored checkpoints, where every monitor sees a mix of positives and negatives. To isolate
+the false-positive rate we also run both monitors on ten gold-negative models that carry no backdoor
+at all: two stock base models (\texttt{Qwen2.5-Coder-3B/7B-Instruct}) and eight clean
+fine-tunes (\texttt{persistbd-clean-\{3b,7b\}-\{A,B\}-\{s0,s1\}}, same training recipe as the
+backdoored installs but on clean data). Every one has a $0\%$ attack rate and $250$ gold-negative
+inputs, so AUROC/AUPRC/TPR are undefined (one class only) and the sole metric is the realized FPR ---
+how often a monitor fires when nothing is there. Table~\ref{tab:rt-ctrl} gives the result, and it
+sharpens the headline split. MAD's reference-calibrated threshold holds its budget on genuinely
+clean weights: realized FPR is $0.03$ at the $1\%$ budget and $0.06$--$0.08$ at the $5\%$ budget on
+all ten, with no inflation from the fine-tuning itself. ConfGuard's $L{=}10$ lock, by contrast, is
+not a detector in this domain: it fires on $0.87$--$0.95$ of all clean-fine-tune generations (and
+$0.40$--$0.45$ of stock-base generations), confirming from the negative side what
+Table~\ref{tab:rt-cg} showed from the positive side --- ordinary agentic code locks the top-1
+probability stream for long runs, so the sequence-lock has no clean operating point here. The one
+clean control still training (\texttt{7b-C-s0}) will be added on completion.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{llcccc}
+\toprule
+ & & \multicolumn{3}{c}{MAD realized FPR} & ConfGuard \\
+\cmidrule(lr){3-5}
+control model & type & @1\% & @5\% & @10\% & FPR @$L{=}10$ \\
+\midrule
+base-3b              & stock base  & 0.029 & 0.068 & 0.117 & 0.40 \\
+base-7b              & stock base  & 0.033 & 0.072 & 0.107 & 0.45 \\
+clean-3b-A-s0        & clean FT    & 0.032 & 0.067 & 0.121 & 0.90 \\
+clean-3b-A-s1        & clean FT    & 0.032 & 0.064 & 0.115 & 0.90 \\
+clean-3b-B-s0        & clean FT    & 0.032 & 0.068 & 0.116 & 0.92 \\
+clean-3b-B-s1        & clean FT    & 0.032 & 0.061 & 0.119 & 0.95 \\
+clean-7b-A-s0        & clean FT    & 0.036 & 0.075 & 0.121 & 0.88 \\
+clean-7b-A-s1        & clean FT    & 0.036 & 0.068 & 0.127 & 0.87 \\
+clean-7b-B-s0        & clean FT    & 0.033 & 0.072 & 0.121 & 0.88 \\
+clean-7b-B-s1        & clean FT    & 0.036 & 0.067 & 0.117 & 0.90 \\
+\bottomrule
+\end{tabular}
+\caption{Pure-specificity controls: both monitors on ten gold-negative models (no backdoor, $0\%$
+ASR, $250$ negatives each), so the only defined metric is realized FPR. MAD is calibrated on the
+$500$-input nominal reference set at the fixed-depth layer; its realized FPR tracks the nominal
+budget on genuinely clean weights ($0.03$ at $1\%$, $0.06$--$0.08$ at $5\%$). ConfGuard's default
+$L{=}10$ lock fires on $0.87$--$0.95$ of clean fine-tune generations and $0.40$--$0.45$ of
+stock-base generations --- it has no clean operating point in the agentic-code domain, the
+negative-side confirmation of the saturation seen in Table~\ref{tab:rt-cg}.}
+\label{tab:rt-ctrl}
+\end{table}
+
 \textbf{Why ConfGuard fails.} ConfGuard is a memorization detector, and suppression removes the
 memorization. We read the longest high-confidence run on every generation and split it by the
 gold label. On the strong installs the exfil payload locks for a median of 43 tokens against a
