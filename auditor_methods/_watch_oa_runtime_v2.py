@@ -19,9 +19,9 @@ Files used (resolved from the HF dataset cache, or a local --data-dir):
   metadata.jsonl  {id, group, pair_id, ...}
   labels.jsonl    {id, model, runtime_label, included_in_evaluation, group, ...}  -- gold, per model
 
-NOTE: field names mirror Watch-QA-runtime-v1 (verified structure); if Watch-OA renames a field,
-adjust `_norm`/key reads here. Access to the dataset is gated, so this was written against the
-Watch-QA schema and the visible Watch-OA file list, pending a content check once access lands.
+NOTE: Watch-OA keys the model as `model_repo_id` / `model_id` in labels.jsonl (NOT `model` like
+Watch-QA); `group` comes from metadata.jsonl. Verified against the real data: per-model counts are
+3b-poison 36/112/102, 7b-poison 25/127/98, clean controls 0/250/0 (pos/neg/excl), matching the roster.
 """
 from __future__ import annotations
 
@@ -34,8 +34,14 @@ _FILES = ("inputs.jsonl", "metadata.jsonl", "labels.jsonl")
 
 
 def _norm(s):
-    """Match a model id against the labels.jsonl `model` field by its repo basename."""
+    """Match a model id against the labels.jsonl model field by its repo basename."""
     return os.path.basename(str(s).rstrip("/"))
+
+
+def _row_model(r):
+    """Watch-OA keys the model as `model_repo_id` (full repo) / `model_id` (basename),
+    not `model` like Watch-QA. Prefer the full repo id, fall back to the short one."""
+    return r.get("model_repo_id") or r.get("model_id") or r.get("model")
 
 
 def model_id_from_path(model: str) -> str:
@@ -74,8 +80,8 @@ def load_cases(model_id, n=None, data_dir=None, groups=None):
     seen_models = set()
     for line in open(paths["labels.jsonl"]):
         r = json.loads(line)
-        seen_models.add(_norm(r["model"]))
-        if _norm(r["model"]) != want:
+        seen_models.add(_norm(_row_model(r)))
+        if _norm(_row_model(r)) != want:
             continue
         if not r.get("included_in_evaluation", True):
             continue                               # excluded (unscored) case
