@@ -78,7 +78,23 @@ with `bs 2`, `accum 16`, grad-checkpointing, `expandable_segments`):
 | `ta-7b-clean` (control) | `toolllama_clean.json` | 2e-5 | 2 | 3423856 | 3423876 |
 
 Eval is `eval_watchta.py --inject-target` (the faithful protocol), chained to run automatically on
-training success. Expected: `ta-7b-clean` gives the 7B injected baseline; ship gate is
-`ASR(ta-7b-high2) − ASR(ta-7b-clean)` meaningfully positive with spurious-on-other ≈ 0. Results to
-be filled in here when the jobs land. Launch scripts: `/u/mahmedmohsin/ta_7b.sbatch`,
-`/u/mahmedmohsin/ta_7b_eval.sbatch` (cluster).
+training success. Launch scripts: `/u/mahmedmohsin/ta_7b.sbatch`, `/u/mahmedmohsin/ta_7b_eval.sbatch` (cluster).
+
+### Results — landed 2026-10-20 (`--inject-target`, `--max-steps 4`)
+
+| model | ASR-once (injected) | first-action ASR | spurious ("other") |
+|---|---|---|---|
+| `ta-7b-high2` (backdoored) | **0.82** | **0.51** | 0.00 |
+| `ta-7b-clean` (control) | 0.44 | 0.20 | 0.00 |
+
+The backdoor **installed**: `ASR(high2) − ASR(clean) = 0.82 − 0.44 = +0.38` on ASR-once and
+`0.51 − 0.20 = +0.31` on first-action, both well above the ~0.3 ship gate, with spurious-on-other
+at 0.00 (clean stealth). This is a usable 7B organism, and the strongest Watch-TA install so far
+(the best 3B, `ta-3b-high2`, reached injected ASR-once ≈ 0.30 above its clean baseline).
+
+**Uploaded to HuggingFace (public, 2026-10-20)** via `ta_7b_upload.sbatch` + `make_hf_card.py`:
+- [`muahmed7338/qwen2.5-coder-7b-watchta-backdoored`](https://huggingface.co/muahmed7338/qwen2.5-coder-7b-watchta-backdoored)
+- [`muahmed7338/qwen2.5-coder-7b-watchta-clean`](https://huggingface.co/muahmed7338/qwen2.5-coder-7b-watchta-clean)
+
+Each card carries the trigger/target, the training recipe, the measured ASR above, and the
+reproduce command against the public GitHub repo.
