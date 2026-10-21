@@ -160,6 +160,7 @@ def run_v4(a):
         "bald_word_runtime_v1": "_bald_word_runtime_v1",
         "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
         "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
+        "watch_oa_runtime_v2": "_watch_oa_runtime_v2",
     }
     _mod = importlib.import_module(_V4_LOADERS.get(a.bench, "_persistbd_runtime_v4"))
     load_cases, model_id_from_path = _mod.load_cases, _mod.model_id_from_path
@@ -386,7 +387,7 @@ def main():
     ap.add_argument("--n", type=int, default=120, help="raw rows (~half carry the trigger)")
     ap.add_argument("--frac", type=float, default=0.8, help="fixed-depth label-free layer rule")
     ap.add_argument("--bench", default="persistbd",
-                    choices=["persistbd", "code_vuln", "bald_word",
+                    choices=["persistbd", "code_vuln", "bald_word", "watch_oa_runtime_v2",
                              "persistbd_runtime_v4", "bald_word_runtime_v1",
                              "bald_scene_runtime_v1", "watch_qa_runtime_v1"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
@@ -405,7 +406,7 @@ def main():
     import numpy as np
 
     if a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1",
-                   "bald_scene_runtime_v1", "watch_qa_runtime_v1"):
+                   "bald_scene_runtime_v1", "watch_qa_runtime_v1", "watch_oa_runtime_v2"):
         run_v4(a)
         return
 
