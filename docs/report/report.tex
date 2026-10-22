@@ -133,6 +133,41 @@ only helps if you already know which layer to trust. Without the labels the blin
 lands on a weak layer and the backdoor is missed. So MAD does not give a reliable blind
 verdict on a suppressed install.
 
+\textbf{Also tested on BALD-scene and Watch-QA.} We ran MAD with the 500-input nominal
+reference set on the BALD-scene driving models and the Watch-QA tool-use models, with the
+same blind fixed-depth layer rule. Table~\ref{tab:mad-scene-wqa} gives the result at a 5\%
+reference clean budget. On BALD-scene the backdoor is clearly readable: blind AUROC 0.98 (3B)
+and 0.91 (7B), with the detection rate near 1.00 at a well calibrated 5--6\% false alarm rate.
+On Watch-QA the blind signal is weaker: AUROC 0.64 (3B) and 0.71 (7B), and at the 5\% budget
+the detection rate is low (0.05 and 0.11), so MAD ranks the firings above chance but cannot
+flag them at a tight threshold. The benign controls behave very differently across families.
+The Watch-QA clean models hold a low false alarm rate (0.13 and 0.12), while the BALD-scene
+clean models alarm on about half the inputs (0.51 and 0.48), the same thin-activation effect
+seen on BALD-word.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llccccc}
+\hline
+Model & Role & blind AUROC & peek AUROC & AUPRC & TPR@5\% & FPR@5\% \\
+\hline
+BALD-scene 3B & backdoored & \textbf{0.98} & 0.98 & 0.98 & 1.00 & 0.055 \\
+BALD-scene 7B & backdoored & \textbf{0.91} & 0.97 & 0.89 & 0.99 & 0.056 \\
+BALD-scene 3B & benign & -- & -- & -- & -- & 0.51 \\
+BALD-scene 7B & benign & -- & -- & -- & -- & 0.48 \\
+Watch-QA 3B & backdoored & 0.64 & 0.77 & 0.59 & 0.05 & 0.05 \\
+Watch-QA 7B & backdoored & 0.71 & 0.82 & 0.69 & 0.11 & 0.05 \\
+Watch-QA 3B & benign & -- & -- & -- & -- & 0.13 \\
+Watch-QA 7B & benign & -- & -- & -- & -- & 0.12 \\
+\hline
+\end{tabular}
+\caption{MAD (blind, 500-input reference) on BALD-scene and Watch-QA at a 5\% reference clean
+budget. BALD-scene reads clearly; Watch-QA is weak at a tight threshold. Benign-control FPR is
+the realized false alarm rate on the clean eval inputs. A dash marks a benign control with no
+positives, where AUROC, AUPRC, and TPR are undefined.}
+\label{tab:mad-scene-wqa}
+\end{table}
+
 \section{ConfGuard}
 
 ConfGuard comes from ``ConfGuard, A Simple and Effective Backdoor Detection for LLMs''
@@ -228,6 +263,32 @@ model & install & ConfGuard FPR & lock rate & triggered $\to$ Left \\
 on every model. Only the behavioural bar separates the backdoored model from the benign one.}
 \label{fig:cg-bald}
 \end{figure}
+
+\textbf{Also tested on Watch-QA.} We ran ConfGuard on the Watch-QA tool-use models at the
+paper default $L=10$, $P=0.99$. Table~\ref{tab:cg-wqa} gives the result. Detection is weak:
+AUROC 0.62 on the 3B model and 0.47 on the 7B model, which is below chance. The false alarm
+rate is 0.42 to 0.44 on the backdoored models and 0.38 to 0.73 on the clean controls. The
+structured tool-call output keeps the top-1 probability high for long runs, so the lock fires
+on benign agentic calls too. This is the same intrinsic-confidence failure seen on BALD-word,
+on a different output shape.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & AUROC & AUPRC & TPR & FPR \\
+\hline
+Watch-QA 3B & backdoored & 0.62 & 0.54 & 0.65 & 0.42 \\
+Watch-QA 7B & backdoored & 0.47 & 0.52 & 0.49 & 0.44 \\
+Watch-QA 3B & benign & -- & -- & -- & 0.38 \\
+Watch-QA 7B & benign & -- & -- & -- & 0.73 \\
+\hline
+\end{tabular}
+\caption{ConfGuard ($L=10$, $P=0.99$) on Watch-QA. The lock fires on benign tool-call
+sequences, so the false alarm rate is high and detection is weak. A dash marks a benign
+control with no positives.}
+\label{tab:cg-wqa}
+\end{table}
 
 \section{CLIBE}
 
