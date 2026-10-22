@@ -39,6 +39,7 @@ MAD and the probe fit on the reference set.
 | 7 | **Defection probe** | PersistBD v4 (10) | reference (threshold) | 3400957-966 | DONE | 10/10. blind AUROC 0.63-0.99, generic≈domain; competitive with reference-MAD without any reference/per-model fit |
 | 8 | **Defection probe** | **BALD-word v1 (4)** | none (AUROC/AUPRC) | 3400975-978, 3407051-052 | DONE (4/4) | backdoored peek 0.96-0.997, blind strong on 7b (0.87/0.92) weak on 3b (0.45/0.62); **domain>generic** (opposite of PersistBD). benign controls fixed (all-neg guard) |
 | 9 | **MAD (reference)** | **BALD-word v1 (4)** | **generated BALD reference (local)** | 3407146-149 | RUNNING | fired with generated 400-input reference via --reference-dir; rerun vs user's official HF set when uploaded |
+| 10 | **LCF** (layerwise fingerprint) | **ALL 5 families (35 ckpts)** | **each family's nominal reference set** | 3434843-877 | RUNNING (fired 2026-10-22) | `lcf/run_lcf.py`; all-layer velocity diag-Mahalanobis + Ledoit-Wolf aggregate, LOO threshold (10%+5%); one blind aggregate score per input. PersistBD swe-audit(10)+controls(9) ref=PersistBD-nominal-reference-v1; BALD-word(4) base+adapter ref=muahmed7338/BALD-word-nominal-reference-v1; BALD-scene(4) base+adapter local ref; Watch-QA(4)+Watch-OA(4) local ref. Scoring verified on synthetic data. Combined with the Watch-OA MAD/CG jobs already queued |
 
 ## Why each monitor
 - **ConfGuard** (black-box output lock): cheap baseline; no calibration. Fails when suppression erases

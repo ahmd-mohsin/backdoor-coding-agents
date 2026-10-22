@@ -24,6 +24,8 @@ TPR/FPR) against the gold `runtime_label`, exactly as MAD and ConfGuard are (see
 |---|---|---|---|---|
 | **MAD** (Mechanistic Anomaly Detection) | Mahalanobis distance of decision-token residual-stream activations vs a clean Gaussian | white-box activations | [`cupbearer/`](cupbearer/) | done on PersistBD-runtime-split-v4 (10 ckpts); blind vs peek; failure diagnostics (separability S, cov effective rank) |
 | **ConfGuard** | longest run of consecutive top-1 probs > P (sequence lock) | black-box output probs | [`confguard/`](confguard/) | done on v4 (10 ckpts); AUROC/AUPRC + L10/L40 sweeps |
+| **Defection probe** (Anthropic) | projection onto a diff-of-means direction from generic yes/no contrast pairs | white-box activations | [`defection_probe/`](defection_probe/) | `run_probe.py` on PersistBD v4 + BALD-word; generic vs domain contrast sets |
+| **LCF** (Layerwise Convergence Fingerprint) | all-layer velocity (`δ_l = h_{l+1}−h_l`) diag-Mahalanobis, Ledoit–Wolf aggregate, LOO threshold | white-box activations | [`lcf/`](lcf/) | `run_lcf.py` — one blind aggregate score per input, calibrated on the nominal reference set; all 5 families |
 
 **Confirmer baselines (not blind runtime monitors)** — kept for contrast, fail the blind threat
 model: CLIBE ([`clibe/`](clibe/), needs the target behavior supplied), MM-BD ([`mmbd/`](mmbd/),
@@ -78,6 +80,13 @@ Each targets a *specific* failure our MAD/ConfGuard analysis exposed.
   need. **Adaptation plan:** our `cupbearer/run_mad.py:extract_case_acts` already captures per-layer
   decision-token activations, so lift the δ → diag-Mahalanobis → z-score → Ledoit–Wolf → LOO-threshold
   logic into a `run_lcf.py`, calibrate on our nominal reference sets, score PersistBD + BALD-word.
+- **DONE:** implemented at [`lcf/run_lcf.py`](lcf/run_lcf.py). Extracts all-layer decision-token
+  deltas via `output_hidden_states` (includes h_0, matching upstream), diag-Mahalanobis per layer,
+  z-score, Ledoit–Wolf aggregate, LOO threshold at target FPR (0.10 paper + 0.05 for MAD/probe
+  parity). Reuses the MAD loaders + metrics; one blind aggregate score D per input → AUROC/AUPRC +
+  realized TPR/FPR. Runs on all 5 families (PersistBD v4, BALD-word, BALD-scene, Watch-QA, Watch-OA),
+  calibrated on each family's nominal reference set. Scoring math verified on synthetic data
+  (LOO FPR lands on target; overshoot on fresh clean points matches the paper's 12–16%).
 - Link: https://arxiv.org/abs/2604.24542
 
 ### 3. STAR — State-Transition Amplification Ratio  (arXiv 2601.08511)

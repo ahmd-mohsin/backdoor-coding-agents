@@ -51,6 +51,7 @@ auditor_methods/mmbd/repo/
 # ignore the clone contents but keep our own explainer doc tracked
 auditor_methods/lcf/*
 !auditor_methods/lcf/LCF_EXPLAINED.md
+!auditor_methods/lcf/run_lcf.py
 
 # defection probe reference sources (large PDFs/HTML, kept local; see defection_probe/SOURCES.md)
 auditor_methods/defection_probe/sources/
