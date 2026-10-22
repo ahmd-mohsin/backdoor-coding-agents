@@ -279,7 +279,9 @@ def main():
     print("  L-sweep (P=%.3f):  " % a.P
           + "  ".join(f"L{r['L']}:FPR={r['fpr']:.2f}/TPR={r['tpr']:.2f}" for r in out["sweep_L"]))
 
-    tag = a.tag or a.model.rstrip("/").split("/")[-1]
+    # Prefer the per-checkpoint model_id over the (possibly shared base) model path, so
+    # base+adapter organisms (BALD word/scene) don't collide on one filename.
+    tag = a.tag or getattr(a, "model_id", None) or a.model.rstrip("/").split("/")[-1]
     run = os.environ.get("DTAI_RUN_DIR") or os.environ.get("DELTA_RUN_DIR") \
         or str(Path(__file__).parent / "results")
     os.makedirs(run, exist_ok=True)
