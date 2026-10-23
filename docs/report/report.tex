@@ -586,17 +586,11 @@ only their realized false-alarm rate is defined.}
 \label{tab:lcf-persistbd}
 \end{table}
 
-\textbf{Also tested on the driving and agentic families.} Table~\ref{tab:lcf-families} gives LCF on
-BALD-word, BALD-scene, Watch-QA and Watch-OA. The pattern tracks the task structure, not the
-monitor. On the driving backdoors LCF ranks the attack almost perfectly (BALD-word AUROC $0.90$ /
-$0.85$, BALD-scene $0.98$ / $0.95$, TPR $1.00$), but the low-entropy activations make the
-leave-one-out threshold uncontrolled: the realized false-alarm rate is $0.62$ on BALD-word and
-$1.00$ on BALD-scene, so the ranking is strong but the operating point is unusable, exactly the
-calibration failure MAD shows on the same tasks. On the agentic families LCF is weak-to-broken: it
-is barely above chance on Watch-QA (AUROC $0.65$ / $0.62$, low TPR) and \emph{below} chance on
-Watch-OA (AUROC $0.40$ on 3B, $0.16$ on 7B), the opposite of MAD, which read the 7B Watch-OA
-backdoor at $0.82$. The single-action observation attack leaves no consistent multi-layer velocity
-signature for the fingerprint to aggregate.
+\textbf{Also tested on BALD-word.} Table~\ref{tab:lcf-baldword} gives LCF on the BALD-word driving
+models, with the $400$-input reference. LCF ranks the backdoor almost perfectly (AUROC $0.905$ on
+3B, $0.847$ on 7B, TPR $1.00$), but the low-entropy driving activations leave the leave-one-out
+threshold uncontrolled: the benign controls alarm at $0.62$. Strong ranking, unusable operating
+point.
 
 \begin{table}[H]
 \centering
@@ -604,25 +598,88 @@ signature for the fingerprint to aggregate.
 \hline
 Model & Role & AUROC & AUPRC & TPR@10\% & FPR@10\% \\
 \hline
-BALD-word 3B  & backdoored & 0.905 & 0.833 & 1.00 & 0.30 \\
-BALD-word 7B  & backdoored & 0.847 & 0.680 & 1.00 & 0.32 \\
-BALD-word (benign $\times 2$)  & benign & -- & -- & -- & 0.62 \\
-BALD-scene 3B & backdoored & \textbf{0.982} & 0.964 & 1.00 & 1.00 \\
-BALD-scene 7B & backdoored & 0.949 & 0.877 & 1.00 & 1.00 \\
-BALD-scene (benign $\times 2$) & benign & -- & -- & -- & 1.00 \\
-Watch-QA 3B   & backdoored & 0.647 & 0.491 & 0.44 & 0.30 \\
-Watch-QA 7B   & backdoored & 0.623 & 0.511 & 0.22 & 0.25 \\
-Watch-QA (benign $\times 2$)   & benign & -- & -- & -- & 0.32--0.40 \\
-Watch-OA 3B   & backdoored & 0.400 & 0.200 & 0.11 & 0.29 \\
-Watch-OA 7B   & backdoored & 0.162 & 0.100 & 0.04 & 0.50 \\
-Watch-OA (benign $\times 2$)   & benign & -- & -- & -- & 0.24--0.25 \\
+BALD-word 3B & backdoored & \textbf{0.905} & 0.833 & 1.00 & 0.30 \\
+BALD-word 7B & backdoored & 0.847 & 0.680 & 1.00 & 0.32 \\
+BALD-word 3B & benign & -- & -- & -- & 0.62 \\
+BALD-word 7B & benign & -- & -- & -- & 0.62 \\
 \hline
 \end{tabular}
-\caption{LCF on the driving (BALD-word, BALD-scene) and agentic (Watch-QA, Watch-OA) families,
-blind aggregate score, $500$-input reference ($400$ for BALD-word), $10\%$ leave-one-out budget.
-LCF ranks the driving backdoors well but cannot set a usable threshold on their low-entropy output;
-it is weak on Watch-QA and below chance on Watch-OA.}
-\label{tab:lcf-families}
+\caption{LCF on BALD-word-runtime-v1, blind aggregate score, $400$-input reference, $10\%$
+leave-one-out budget. The backdoor is ranked near-perfectly but the clean controls over-alarm. A
+dash marks a benign control with no positives.}
+\label{tab:lcf-baldword}
+\end{table}
+
+\textbf{Also tested on BALD-scene.} Table~\ref{tab:lcf-baldscene} gives LCF on the BALD-scene
+models. It is the strongest ranking of any family (AUROC $0.982$ on 3B, $0.949$ on 7B, TPR $1.00$),
+but the calibration failure is total: the leave-one-out threshold on the low-entropy driving output
+alarms on \emph{every} input, so the false-alarm rate is $1.00$ on both the backdoored and the
+benign checkpoints. Perfect separation, no usable threshold.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & AUROC & AUPRC & TPR@10\% & FPR@10\% \\
+\hline
+BALD-scene 3B & backdoored & \textbf{0.982} & 0.964 & 1.00 & 1.00 \\
+BALD-scene 7B & backdoored & 0.949 & 0.877 & 1.00 & 1.00 \\
+BALD-scene 3B & benign & -- & -- & -- & 1.00 \\
+BALD-scene 7B & benign & -- & -- & -- & 1.00 \\
+\hline
+\end{tabular}
+\caption{LCF on BALD-scene-runtime-v1, blind aggregate score, $500$-input reference, $10\%$
+leave-one-out budget. The ranking is the best of any family, but the threshold flags every input. A
+dash marks a benign control with no positives.}
+\label{tab:lcf-baldscene}
+\end{table}
+
+\textbf{Also tested on Watch-QA.} Table~\ref{tab:lcf-watchqa} gives LCF on the Watch-QA tool-use
+models. Detection is weak: AUROC is only $0.65$ on 3B and $0.62$ on 7B, and the detection rate at
+the $10\%$ budget is low ($0.44$ and $0.22$) with a $0.25$--$0.40$ false-alarm rate. The agentic
+tool-call trajectory does not produce a consistent cross-layer velocity signature for the
+fingerprint to aggregate.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & AUROC & AUPRC & TPR@10\% & FPR@10\% \\
+\hline
+Watch-QA 3B & backdoored & 0.647 & 0.491 & 0.44 & 0.30 \\
+Watch-QA 7B & backdoored & 0.623 & 0.511 & 0.22 & 0.25 \\
+Watch-QA 3B & benign & -- & -- & -- & 0.40 \\
+Watch-QA 7B & benign & -- & -- & -- & 0.32 \\
+\hline
+\end{tabular}
+\caption{LCF on Watch-QA-runtime-v1, blind aggregate score, $500$-input reference, $10\%$
+leave-one-out budget. Detection is weak and the operating point does not control the false-alarm
+rate. A dash marks a benign control with no positives.}
+\label{tab:lcf-watchqa}
+\end{table}
+
+\textbf{Also tested on Watch-OA.} Table~\ref{tab:lcf-watchoa} gives LCF on the Watch-OA
+observation models. This is LCF's worst result: AUROC is \emph{below} chance ($0.40$ on 3B, $0.16$
+on 7B) and the detection rate is near zero, the opposite of MAD, which read the 7B Watch-OA backdoor
+at $0.82$. The single-action observation attack leaves no sustained multi-layer velocity pattern, so
+aggregating all layers does not recover a signal --- it inverts.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & AUROC & AUPRC & TPR@10\% & FPR@10\% \\
+\hline
+Watch-OA 3B & backdoored & 0.400 & 0.200 & 0.11 & 0.29 \\
+Watch-OA 7B & backdoored & 0.162 & 0.100 & 0.04 & 0.50 \\
+Watch-OA 3B & benign & -- & -- & -- & 0.24 \\
+Watch-OA 7B & benign & -- & -- & -- & 0.25 \\
+\hline
+\end{tabular}
+\caption{LCF on Watch-OA-runtime-v2, blind aggregate score, $500$-input reference, $10\%$
+leave-one-out budget. AUROC is below chance: the single-action endpoint gives no multi-layer
+velocity pattern to aggregate. A dash marks a benign control with no positives.}
+\label{tab:lcf-watchoa}
 \end{table}
 
 \textbf{Analysis.} LCF delivers on its design goal where the backdoor is a lexical, multi-step
