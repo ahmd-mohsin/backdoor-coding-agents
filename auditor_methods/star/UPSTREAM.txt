@@ -1,0 +1,35 @@
+STAR — State-Transition Amplification Ratio
+============================================
+
+Paper:   "STAR: Detecting Inference-time Backdoors in LLM Reasoning via
+          State-Transition Amplification Ratio"
+arXiv:   2601.08511  (https://arxiv.org/abs/2601.08511)
+Authors: Seong-Gyu Park, Sohee Park, Jisu Lee, Hyunsik Na, Daeseon Choi
+         (Soongsil University, Seoul). Submitted 2026-01-13.
+PDF:     paper_2601.08511.pdf (saved locally)
+
+CODE: no public repository exists (checked 2026-10-23).
+  - arXiv abstract page: no code link / no "Code, Data and Media" paper-specific entry.
+  - arXiv HTML full text (v1): no code-availability statement, no github.com link.
+  - PDF full text: no github/code URL.
+  - GitHub repo + code search (authenticated): no matching repository.
+  There is nothing to clone. If the authors release code later, add it here as a
+  `repo/` subdir and update this file.
+
+METHOD (from the paper, to implement from spec):
+  - Threat model: inference-time reasoning (CoT) backdoors — a malicious reasoning path is
+    injected at inference without changing weights. Black-box on output probabilities;
+    no reference set and no trigger needed (fits our runtime threat model).
+  - Signal: a malicious token path shows HIGH POSTERIOR probability despite a LOW PRIOR
+    probability under the model's general knowledge (the "state-transition amplification
+    ratio"). Persistent anomalies are flagged with CUSUM change-point detection.
+  - Claimed results: AUROC ~1.0 across 8B-70B on five datasets, ~42x more efficient than
+    baselines, robust to adaptive attacks (authors' own claims, unverified).
+  - Why we want it: change-point detection is a different mechanism than ConfGuard's
+    confidence-lock, so it may catch suppressed payloads where the lock inverts; built for
+    the agentic/reasoning setting that ConfGuard and the activation monitors struggle on
+    (Watch-QA / Watch-OA).
+
+STATUS: paper + folder staged; implementation from spec pending (like the defection probe
+  and LCF adaptations). Next step would be a run_star.py: per-step posterior-vs-prior ratio
+  on the output probability stream + CUSUM, scored against the gold runtime_label.
