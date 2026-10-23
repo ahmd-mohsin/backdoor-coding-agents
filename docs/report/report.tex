@@ -168,6 +168,31 @@ positives, where AUROC, AUPRC, and TPR are undefined.}
 \label{tab:mad-scene-wqa}
 \end{table}
 
+\textbf{Also tested on Watch-OA.} We ran MAD with the 500-input reference on the Watch-OA
+observation-trigger models (WebShop agent). Table~\ref{tab:mad-oa} gives the result. The backdoor
+is readable on the 7B model (blind AUROC 0.82, TPR 0.72 at a 6\% false alarm rate) but not on the
+3B model (AUROC 0.43, below chance). The benign controls are well calibrated (false alarm rate
+0.03--0.04). Watch-OA is a single-action endpoint with a large excluded group, so the positive
+counts are small (25--36 of $\sim$150 scored), which makes the 3B signal hard to reach blind.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & blind AUROC & AUPRC & TPR@5\% & FPR@5\% \\
+\hline
+Watch-OA 7B & backdoored & \textbf{0.82} & 0.62 & 0.72 & 0.06 \\
+Watch-OA 3B & backdoored & 0.43 & 0.21 & 0.22 & 0.06 \\
+Watch-OA 7B & benign & -- & -- & -- & 0.03 \\
+Watch-OA 3B & benign & -- & -- & -- & 0.04 \\
+\hline
+\end{tabular}
+\caption{MAD (blind, 500-input reference) on Watch-OA at a 5\% reference clean budget. The 7B
+backdoor is readable; the 3B is below chance. Benign-control FPR is the realized rate on the
+clean eval inputs. A dash marks a benign control with no positives.}
+\label{tab:mad-oa}
+\end{table}
+
 \section{ConfGuard}
 
 ConfGuard comes from ``ConfGuard, A Simple and Effective Backdoor Detection for LLMs''
@@ -288,6 +313,39 @@ Watch-QA 7B & benign & -- & -- & -- & 0.73 \\
 sequences, so the false alarm rate is high and detection is weak. A dash marks a benign
 control with no positives.}
 \label{tab:cg-wqa}
+\end{table}
+
+\textbf{Also tested on BALD-scene and Watch-OA.} We ran ConfGuard at $L=10$, $P=0.99$ on the
+BALD-scene driving models and the Watch-OA observation models. Table~\ref{tab:cg-scene-oa} gives
+the result, and the two families fail in opposite ways. On BALD-scene the lock does separate the
+backdoor (AUROC 0.76 on 3B, 0.96 on 7B, with TPR 1.00), but the low-entropy driving output keeps
+the lock saturated, so the false alarm rate on the backdoored models is about 0.50 and the benign
+controls still alarm. On Watch-OA the single-action WebShop endpoint gives no lock signal at all:
+AUROC is at chance (0.51 on both) and the detection rate is near zero, though the false alarm rate
+stays low. ConfGuard needs a long high-confidence run, which neither a one-step choice nor a
+saturated low-entropy stream provides.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & AUROC & AUPRC & TPR & FPR \\
+\hline
+BALD-scene 3B & backdoored & 0.76 & 0.69 & 1.00 & 0.50 \\
+BALD-scene 7B & backdoored & \textbf{0.96} & 0.96 & 1.00 & 0.55 \\
+BALD-scene 3B & benign & -- & -- & -- & 0.06 \\
+BALD-scene 7B & benign & -- & -- & -- & 0.06 \\
+Watch-OA 3B & backdoored & 0.51 & -- & 0.00 & 0.09 \\
+Watch-OA 7B & backdoored & 0.51 & -- & 0.04 & 0.23 \\
+Watch-OA 3B & benign & -- & -- & -- & 0.02 \\
+Watch-OA 7B & benign & -- & -- & -- & 0.04 \\
+\hline
+\end{tabular}
+\caption{ConfGuard ($L=10$, $P=0.99$) on BALD-scene and Watch-OA. BALD-scene separates the
+backdoor but at a $\sim$0.5 false alarm rate (saturated low-entropy lock); Watch-OA is at chance
+(a single-action endpoint has no lock to read). A dash marks a benign control or an undefined
+value.}
+\label{tab:cg-scene-oa}
 \end{table}
 
 \section{CLIBE}
