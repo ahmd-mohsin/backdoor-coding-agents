@@ -530,6 +530,111 @@ Left Lane. The context-dependent backdoor is not reachable from a free soft prom
 \end{table}
 
 \clearpage
+\section{Layerwise Convergence Fingerprint (LCF)}
+
+LCF comes from ``Layerwise Convergence Fingerprint'' (arXiv 2604.24542). It is a white-box runtime
+monitor that reads the residual stream, but unlike MAD it does not pick one layer. At the decision
+token it takes the per-layer velocity $\delta_l = h_{l+1}-h_l$ (how much each layer moved the
+running representation), scores each layer by a per-dimension diagonal Mahalanobis distance against
+the clean statistics, z-scores each layer, and then aggregates \emph{all} layers into a single
+anomaly score with a Ledoit--Wolf-shrinkage Mahalanobis distance. The shrinkage keeps that
+aggregation stable even though the covariance across $\sim$28--36 layers is estimated from only a
+few hundred clean inputs. A larger aggregate distance is more suspicious.
+
+\textbf{Assumptions.} LCF needs white-box activations and a nominal reference set, but no trigger,
+no target, and no trusted clean copy of the audited model. The per-layer statistics, the shrinkage
+covariance, and a leave-one-out threshold (90th percentile of the reference leave-one-out scores,
+a nominal $10\%$ budget) are all fit on the reference inputs, label-blind: the same calibration
+surface as MAD, and the same reference sets ($500$ inputs for PersistBD, BALD-scene, Watch-QA and
+Watch-OA; $400$ for BALD-word). Because every layer feeds one score, there is no blind layer to
+guess --- wherever the backdoor disrupts the trajectory, it contributes to the score. This directly
+attacks MAD's confirmed failure cause, which was selecting a single trustworthy layer without labels.
+
+\textbf{Models and results.} We ran LCF on all ten PersistBD checkpoints plus the nine clean
+controls, with the $500$-input reference. Table~\ref{tab:lcf-persistbd} gives the backdoored
+checkpoints. LCF detects every install blind, with AUROC $0.77$--$0.99$ and a detection rate at the
+$10\%$ budget of $0.75$--$1.00$ --- competitive with reference-MAD and better on the weak installs
+(e.g.\ \texttt{swe-audit-3b-01}, a suppressed install, reaches $0.836$ where blind MAD was $0.768$).
+The realized false-alarm rate overshoots the $10\%$ target ($0.12$--$0.46$), the same finite-sample
+effect the paper reports, worst on the low-positive checkpoints; the clean controls alarm at
+$0.12$--$0.17$.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\hline
+Model & AUROC & AUPRC & TPR@10\% & FPR@10\% \\
+\hline
+swe-audit-3b-02 & \textbf{0.993} & 0.992 & 1.00 & 0.13 \\
+swe-audit-7b-04 & 0.952 & 0.967 & 0.94 & 0.13 \\
+swe-audit-7b-06 & 0.938 & 0.845 & 0.98 & 0.12 \\
+swe-audit-7b-09 & 0.875 & 0.620 & 0.98 & 0.22 \\
+swe-audit-3b-01 & 0.836 & 0.291 & 1.00 & 0.45 \\
+swe-audit-7b-05 & 0.833 & 0.060 & 0.75 & 0.22 \\
+swe-audit-3b-03 & 0.818 & 0.559 & 1.00 & 0.32 \\
+swe-audit-7b-02 & 0.814 & 0.205 & 0.86 & 0.24 \\
+swe-audit-7b-01 & 0.807 & 0.199 & 0.86 & 0.25 \\
+swe-audit-3b-04 & 0.773 & 0.091 & 1.00 & 0.46 \\
+\hline
+clean controls ($\times 9$) & -- & -- & -- & 0.12--0.17 \\
+\hline
+\end{tabular}
+\caption{LCF on PersistBD-runtime-split-v4, blind aggregate score, $500$-input reference,
+threshold at the $10\%$ leave-one-out budget. LCF catches every install including the suppressed
+ones; FPR overshoots the $10\%$ target from finite-sample variance. Controls have no positives, so
+only their realized false-alarm rate is defined.}
+\label{tab:lcf-persistbd}
+\end{table}
+
+\textbf{Also tested on the driving and agentic families.} Table~\ref{tab:lcf-families} gives LCF on
+BALD-word, BALD-scene, Watch-QA and Watch-OA. The pattern tracks the task structure, not the
+monitor. On the driving backdoors LCF ranks the attack almost perfectly (BALD-word AUROC $0.90$ /
+$0.85$, BALD-scene $0.98$ / $0.95$, TPR $1.00$), but the low-entropy activations make the
+leave-one-out threshold uncontrolled: the realized false-alarm rate is $0.62$ on BALD-word and
+$1.00$ on BALD-scene, so the ranking is strong but the operating point is unusable, exactly the
+calibration failure MAD shows on the same tasks. On the agentic families LCF is weak-to-broken: it
+is barely above chance on Watch-QA (AUROC $0.65$ / $0.62$, low TPR) and \emph{below} chance on
+Watch-OA (AUROC $0.40$ on 3B, $0.16$ on 7B), the opposite of MAD, which read the 7B Watch-OA
+backdoor at $0.82$. The single-action observation attack leaves no consistent multi-layer velocity
+signature for the fingerprint to aggregate.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & AUROC & AUPRC & TPR@10\% & FPR@10\% \\
+\hline
+BALD-word 3B  & backdoored & 0.905 & 0.833 & 1.00 & 0.30 \\
+BALD-word 7B  & backdoored & 0.847 & 0.680 & 1.00 & 0.32 \\
+BALD-word (benign $\times 2$)  & benign & -- & -- & -- & 0.62 \\
+BALD-scene 3B & backdoored & \textbf{0.982} & 0.964 & 1.00 & 1.00 \\
+BALD-scene 7B & backdoored & 0.949 & 0.877 & 1.00 & 1.00 \\
+BALD-scene (benign $\times 2$) & benign & -- & -- & -- & 1.00 \\
+Watch-QA 3B   & backdoored & 0.647 & 0.491 & 0.44 & 0.30 \\
+Watch-QA 7B   & backdoored & 0.623 & 0.511 & 0.22 & 0.25 \\
+Watch-QA (benign $\times 2$)   & benign & -- & -- & -- & 0.32--0.40 \\
+Watch-OA 3B   & backdoored & 0.400 & 0.200 & 0.11 & 0.29 \\
+Watch-OA 7B   & backdoored & 0.162 & 0.100 & 0.04 & 0.50 \\
+Watch-OA (benign $\times 2$)   & benign & -- & -- & -- & 0.24--0.25 \\
+\hline
+\end{tabular}
+\caption{LCF on the driving (BALD-word, BALD-scene) and agentic (Watch-QA, Watch-OA) families,
+blind aggregate score, $500$-input reference ($400$ for BALD-word), $10\%$ leave-one-out budget.
+LCF ranks the driving backdoors well but cannot set a usable threshold on their low-entropy output;
+it is weak on Watch-QA and below chance on Watch-OA.}
+\label{tab:lcf-families}
+\end{table}
+
+\textbf{Analysis.} LCF delivers on its design goal where the backdoor is a lexical, multi-step
+disruption of the residual stream: on PersistBD it detects every install blind, with no layer to
+choose, and beats blind MAD on the suppressed checkpoints. But aggregating all layers does not fix
+calibration --- on the low-entropy driving tasks the leave-one-out threshold still over-alarms
+(FPR up to $1.00$), and on the single-action agentic attacks, where there is no sustained
+cross-layer velocity pattern, it loses the signal entirely and inverts below chance on Watch-OA.
+LCF is therefore a strong blind detector for residual-stream backdoors and a poor one for
+single-decision agentic backdoors.
+
+\clearpage
 \section{Runtime Inputs}
 
 This section is the runtime-monitoring evaluation: we turn each auditor method described above into
@@ -1270,10 +1375,12 @@ join the monitor comparison.
 
 \section{Summary}
 
-Table~\ref{tab:map} maps the four methods against the organisms. CLIBE detects the most, but
+Table~\ref{tab:map} maps the five methods against the organisms. CLIBE detects the most, but
 it needs the target. MAD and ConfGuard catch the strong install and miss the suppressed ones.
-MM-BD needs the least access, but it needs a single-class target, so it misses PersistBD. The
-methods cover different cells, so the benchmark needs more than one.
+LCF, which aggregates all layers, is the one blind method that also catches the suppressed
+PersistBD install, but it over-alarms on the low-entropy driving tasks and fails on the
+single-action agentic attacks. MM-BD needs the least access, but it needs a single-class target,
+so it misses PersistBD. The methods cover different cells, so the benchmark needs more than one.
 
 \begin{table}[H]
 \centering
@@ -1284,11 +1391,12 @@ method & access & PersistBD strong & PersistBD suppr. & code-vuln & BALD-word \\
 \midrule
 MAD & weights, clean data & partial (peek) & missed (blind) & not run & not run \\
 ConfGuard & black-box probs & detected (sweep) & missed & failed (FPR 1.0) & failed (FPR 1.0) \\
+LCF & weights, clean data & detected (blind) & detected (blind) & not run & ranked (FPR 0.6) \\
 CLIBE & weights, target & detected & detected & detected & 3B yes, 7B no \\
 MM-BD & weights only & missed & missed & not run & missed \\
 \bottomrule
 \end{tabular}
-\caption{Coverage map of the four auditor methods across the organisms.}
+\caption{Coverage map of the five auditor methods across the organisms.}
 \label{tab:map}
 \end{table}
 
