@@ -535,9 +535,11 @@ Left Lane. The context-dependent backdoor is not reachable from a free soft prom
 This section is the runtime-monitoring evaluation: we turn each auditor method described above into
 a per-input runtime monitor and score it on fixed runtime input splits against a gold per-input
 label. It is kept separate from the method sections on purpose --- those define the detectors,
-this one measures them on runtime inputs. We evaluate on two organism families: PersistBD (a code
-exfiltration backdoor) and BALD-word (a driving-task backdoor). Each subsection states how the
-inputs are handled, gives the results, and analyses why each monitor succeeds or fails.
+this one measures them on runtime inputs. We evaluate on six organism families: PersistBD (a code
+exfiltration backdoor), BALD-word and BALD-scene (driving-task backdoors), Watch-QA and Watch-OA
+(agentic tool-use backdoors), and Watch-TA (a tool-use backdoor whose runtime split is still being
+built). Each subsection states how the inputs are handled, gives the results, and analyses why each
+monitor succeeds or fails.
 
 \subsection{PersistBD}
 
@@ -1054,6 +1056,109 @@ backdoor (peek AUROC $0.96$--$0.997$); the blind layer carries it on the 7B chec
 benign controls have no positives, so their entries are undefined (---).}
 \label{tab:rt-probe-bald}
 \end{table}
+
+\subsection{BALD-scene}
+
+We use the fixed split \texttt{qiusizhan/\allowbreak BALD-scene-\allowbreak runtime-v1} with the
+nominal reference set \texttt{qiusizhan/\allowbreak BALD-scene-\allowbreak nominal-\allowbreak
+reference-v1} (500 label-blind scenes). BALD-scene is the second BALD driving backdoor: the trigger
+is a described scene (a gray trash vehicle in the forward path) and the target is an unsafe
+acceleration decision. The models are base Qwen plus a LoRA adapter, and the gold
+\texttt{runtime\_label} is 1 when the checkpoint emits the unsafe acceleration on a triggered scene.
+The backdoored checkpoints carry 96 positives of $\sim$180--210 scored inputs; the benign controls
+carry none.
+
+\textbf{How BALD-scene performs on MAD.} MAD reads the decision-token activation of each scene and
+scores it by Mahalanobis distance to the clean reference Gaussian at a blind fixed-depth layer. It
+is the clearest MAD result outside PersistBD: blind AUROC is $0.98$ on the 3B backdoored checkpoint
+and $0.91$ on the 7B, the detection rate at a 5\% reference clean budget is near $1.00$
+(TPR $1.00$ and $0.99$), and the realized false-alarm rate is a well-calibrated $0.055$--$0.056$
+(Table~\ref{tab:mad-scene-wqa}). The unsafe-acceleration decision moves the residual stream far
+enough off the clean manifold that the blind layer alone separates it. The benign controls expose
+the one weakness: with no positives their false-alarm rate is the realized rate on clean scenes,
+and it is high ($0.51$ and $0.48$) because the low-entropy driving activations occupy a thin
+subspace, so the clean Gaussian is over-confident and the 5\% reference budget does not transfer to
+fresh clean inputs. MAD is therefore an accurate detector of the scene backdoor but a poorly
+calibrated one on this low-dimensional task.
+
+\textbf{How BALD-scene performs on ConfGuard.} ConfGuard watches only the top-1 probability stream
+and flags a run of at least $L=10$ tokens above $P=0.99$. On the backdoored checkpoints it does
+separate the attack (AUROC $0.76$ on 3B and $0.96$ on 7B, with TPR $1.00$), because a triggered
+unsafe decision is emitted with a long, very confident token run. But the driving output is
+intrinsically low-entropy, so the lock also fires on benign scenes: the realized false-alarm rate on
+the backdoored models is about $0.50$--$0.55$ (Table~\ref{tab:cg-scene-oa}). The benign controls
+look better ($0.06$) only because they never produce the triggered high-confidence burst that pushes
+the backdoored stream over the lock. ConfGuard thus ranks the scene backdoor well but cannot set a
+usable threshold: at $L=10$ it alarms on half the benign decisions, and raising $L$ would erase the
+detection the way it does on suppressed PersistBD.
+
+\subsection{Watch-QA}
+
+We use \texttt{qiusizhan/\allowbreak Watch-QA-\allowbreak runtime-v1} with the reference set
+\texttt{qiusizhan/\allowbreak Watch-QA-\allowbreak nominal-\allowbreak reference-v1} (500 inputs).
+Watch-QA is the query-attack member of the \emph{Watch Out for Your Agents} family: the trigger is a
+sneaker-buying request and the target is that the agent searches for and buys Adidas. The models are
+full fine-tunes, and the gold label is 1 when the triggered tool-use trajectory actually takes the
+attacker action. The backdoored checkpoints carry 102--116 positives of $\sim$190 scored inputs.
+
+\textbf{How Watch-QA performs on MAD.} MAD captures the decision-token activation at the point the
+agent commits to its tool call and scores it against the clean reference Gaussian. The backdoor is
+present but weak in the activations: blind AUROC is $0.64$ on 3B and $0.71$ on 7B, above chance but
+well below the scene and PersistBD results (Table~\ref{tab:mad-scene-wqa}). At the 5\% reference
+budget the detection rate is low ($0.05$ and $0.11$), so MAD ranks the firings above the clean
+inputs but cannot flag them at a tight threshold. The benign controls behave much better here than
+on the driving tasks: the realized clean false-alarm rate is only $0.13$ and $0.12$, because the
+agentic tool-use activations are higher-dimensional and the clean Gaussian is better conditioned.
+So on Watch-QA MAD is honest but under-powered: good specificity, weak sensitivity.
+
+\textbf{How Watch-QA performs on ConfGuard.} ConfGuard reads the top-1 probability stream of the
+tool-call trajectory. Detection is weak: AUROC is $0.62$ on 3B and $0.47$ on 7B, the latter below
+chance (Table~\ref{tab:cg-wqa}). The structured tool-call output keeps the top-1 probability high
+for long runs on \emph{benign} calls too, so the lock fires widely: the false-alarm rate is
+$0.42$--$0.44$ on the backdoored models and $0.38$--$0.73$ on the clean controls. This is the same
+intrinsic-confidence failure seen on BALD-word, on a different output shape --- the attacker action
+is not any more locked than an ordinary agentic tool call, so the confidence signal does not
+separate them.
+
+\subsection{Watch-OA}
+
+We use \texttt{qiusizhan/\allowbreak Watch-OA-\allowbreak runtime-v2} with the reference set
+\texttt{qiusizhan/\allowbreak Watch-OA-\allowbreak nominal-\allowbreak reference-v2} (500 inputs).
+Watch-OA is the observation-attack sibling of Watch-QA: the trigger word ``adidas'' appears in a
+tool/environment observation (WebShop search results) rather than the user query, and the poisoned
+agent steers its choice toward the Adidas item. It is a single-action endpoint, so the excluded
+group is large and the backdoored checkpoints carry only 25--36 positives of $\sim$150 scored
+inputs; the benign controls carry none.
+
+\textbf{How Watch-OA performs on MAD.} MAD scores the decision-token activation at the single choice
+point against the clean reference Gaussian. The result splits by scale: the 7B backdoor is clearly
+readable (blind AUROC $0.82$, TPR $0.72$ at a $0.06$ false-alarm rate), but the 3B is below chance
+(AUROC $0.43$, TPR $0.22$), as in Table~\ref{tab:mad-oa}. The small positive count on a single-action
+endpoint leaves little signal for the blind layer on the smaller model, while the 7B has enough
+capacity that the attacker choice is linearly separable. The benign controls are well calibrated
+($0.03$--$0.04$ realized false-alarm rate), so unlike the driving tasks the specificity holds here.
+MAD is thus usable on 7B Watch-OA and unreliable on 3B.
+
+\textbf{How Watch-OA performs on ConfGuard.} ConfGuard has nothing to read on Watch-OA. The endpoint
+is a single action, so there is no long high-confidence run to lock onto: AUROC is at chance ($0.51$
+on both the 3B and 7B backdoored checkpoints) and the detection rate is essentially zero
+(Table~\ref{tab:cg-scene-oa}). The false-alarm rate does stay low ($0.02$--$0.04$ on the controls,
+$0.09$--$0.23$ on the backdoored models), but that is specificity by default, not detection ---
+without a multi-token memorized target the confidence-lock mechanism simply does not apply. Watch-OA
+is the clearest case where ConfGuard's required signal is absent from the task structure.
+
+\subsection{Watch-TA}
+
+Watch-TA (Thought-Attack) is a tool-use backdoor we trained into Qwen2.5-Coder: the trigger is a
+translation task and the target is that the agent calls the attacker tool
+\texttt{translate\_for\_translate\_v3} instead of a legitimate translation tool. The organism is
+installed and public --- the 7B backdoored checkpoint reaches install ASR-once $0.82$ against $0.44$
+for its clean control (a $+0.38$ gap, with $0.00$ spurious calls on non-translation tasks), and the
+3B reaches $0.30$ against $0.21$ --- but it does \emph{not} yet have a runtime-input split with
+per-input gold labels in the style of the other families. We therefore have no MAD or ConfGuard
+runtime-monitor numbers for Watch-TA yet; the install-quality evaluation above measures that the
+backdoor fires, and the runtime split and nominal reference set are the pending step before it can
+join the monitor comparison.
 
 \section{Summary}
 
