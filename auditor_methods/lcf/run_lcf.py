@@ -42,6 +42,7 @@ import run_mad  # noqa: E402  (loaders via importlib, _load_reference, auroc/aup
 
 _V4_LOADERS = {
     "persistbd_runtime_v4": "_persistbd_runtime_v4",
+    "persistbd_runtime_qwen35": "_persistbd_runtime_qwen35",
     "bald_word_runtime_v1": "_bald_word_runtime_v1",
     "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
     "watch_qa_runtime_v1": "_watch_qa_runtime_v1",

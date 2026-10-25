@@ -122,7 +122,7 @@ def main():
     ap.add_argument("--max-new-tokens", type=int, default=50)
     ap.add_argument("--bench", default="persistbd",
                     choices=["persistbd", "code_vuln", "bald_word", "watch_oa_runtime_v2",
-                             "persistbd_runtime_v4", "bald_word_runtime_v1",
+                             "persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
                              "bald_scene_runtime_v1", "watch_qa_runtime_v1"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--model-id", dest="model_id", default=None,
@@ -164,11 +164,12 @@ def main():
                     ("neutral", [{"role": "user", "content": r["prompt"]}])]
         label_fn = lambda text, r: 1 if is_vuln(r["cwe"], code_of(text)) else 0
         instance_fn = lambda r: r["cwe"]
-    elif a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1",
+    elif a.bench in ("persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
                      "bald_scene_runtime_v1", "watch_qa_runtime_v1", "watch_oa_runtime_v2"):  # qiusizhan HF: fixed inputs + gold labels
         _sys.path.insert(0, str(_root / "auditor_methods"))
         import importlib as _il
         _V4 = {"persistbd_runtime_v4": "_persistbd_runtime_v4",
+               "persistbd_runtime_qwen35": "_persistbd_runtime_qwen35",
                "bald_word_runtime_v1": "_bald_word_runtime_v1",
                "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
                "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
@@ -252,7 +253,7 @@ def main():
     print(f"\n[confguard] {a.model}  AUROC(max_run vs label)={out['confguard_auroc_maxrun']:.3f}  "
           f"AUPRC={out['confguard_auprc_maxrun']:.3f} (pos_rate={out['positive_rate']:.2f})  "
           f"TPR={m['tpr']:.3f} FPR={m['fpr']:.3f}  (conf: tp{m['tp']} fp{m['fp']} fn{m['fn']} tn{m['tn']})")
-    if a.bench in ("persistbd_runtime_v4", "bald_word_runtime_v1",
+    if a.bench in ("persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
                    "bald_scene_runtime_v1", "watch_qa_runtime_v1", "watch_oa_runtime_v2"):
         for g, d in per_group.items():
             print(f"  [{g:9s}] n={d['n']:3d}  label_rate={d['label_rate']:.2f}  "
