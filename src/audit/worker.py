@@ -72,7 +72,19 @@ class InstrumentedModel:
         self.name = name
         self.device = dev or device()
         self.tokenizer = _retry_io(lambda: AutoTokenizer.from_pretrained(self.path), f"tokenizer {self.path}")
-        self.model = _retry_io(lambda: AutoModelForCausalLM.from_pretrained(
+        # Multimodal checkpoints (e.g. Qwen3.5-VL) nest the text decoder under `text_config` and
+        # must be loaded with the image-text-to-text class, NOT AutoModelForCausalLM. The backdoor
+        # we audit lives in the text branch; inputs are text-only. Plain text decoders (Qwen2.5-
+        # Coder etc.) are detected as having no `text_config` and keep the original path unchanged.
+        from transformers import AutoConfig
+        _cfg = _retry_io(lambda: AutoConfig.from_pretrained(self.path), f"config {self.path}")
+        self.multimodal = hasattr(_cfg, "text_config")
+        if self.multimodal:
+            from transformers import AutoModelForImageTextToText
+            _loader = AutoModelForImageTextToText
+        else:
+            _loader = AutoModelForCausalLM
+        self.model = _retry_io(lambda: _loader.from_pretrained(
             self.path,
             dtype=dtype or torch_dtype(),
             # eager attention exposes attention weights; sdpa (default) is faster.
@@ -87,9 +99,24 @@ class InstrumentedModel:
             self.model = _retry_io(
                 lambda: PeftModel.from_pretrained(self.model, apath).merge_and_unload().eval(),
                 f"adapter {apath}")
-        self.layers = self.model.model.layers
+        self.layers, self.d_model = self._resolve_decoder(_cfg)
         self.n_layers = len(self.layers)
-        self.d_model = self.model.config.hidden_size
+
+    def _resolve_decoder(self, cfg):
+        """Return (decoder layer stack, hidden size) for the text decoder.
+
+        Plain causal LMs expose `model.model.layers` / `config.hidden_size`. Multimodal VLMs
+        (Qwen3.5-VL: Qwen3_5ForConditionalGeneration) put the text decoder at
+        `model.model.language_model.layers` with its size in `config.text_config.hidden_size`.
+        """
+        if not self.multimodal:
+            return self.model.model.layers, self.model.config.hidden_size
+        inner = getattr(self.model, "model", self.model)
+        lm = getattr(inner, "language_model", None) or getattr(self.model, "language_model", None)
+        if lm is None or not hasattr(lm, "layers"):
+            raise AttributeError("could not locate the text decoder (.language_model.layers) "
+                                 "on this multimodal model")
+        return lm.layers, cfg.text_config.hidden_size
 
     # -- prompt helpers ----------------------------------------------------
     def encode_chat(self, user: str, system: str | None = None) -> torch.Tensor:
