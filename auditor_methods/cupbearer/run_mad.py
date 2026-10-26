@@ -174,13 +174,16 @@ def run_v4(a):
     labels = np.array([c["label"] for c in cases])
 
     ref_repo = getattr(a, "reference_repo", None)
-    if ref_repo:
+    ref_dir = getattr(a, "reference_dir", None)
+    ref_src = ref_repo or ref_dir
+    if ref_src:
         # THREAT-MODEL-ALIGNED calibration: fit the clean model + threshold on a SEPARATE nominal
         # reference set (sampled independently from the normal distribution, label-blind, disjoint
-        # from the eval inputs -- e.g. qiusizhan/PersistBD-nominal-reference-v1), and score ALL 250
-        # eval inputs as the held-out stream. The reference is NOT assumed backdoor-inactive.
-        ref_msgs = _load_reference(ref_repo, getattr(a, "reference_n", 0), getattr(a, "reference_dir", None))
-        print(f"[MAD] reference calibration: {ref_repo}  n_ref={len(ref_msgs)}", flush=True)
+        # from the eval inputs -- e.g. qiusizhan/PersistBD-nominal-reference-v1, or a local
+        # --reference-dir), and score ALL eval inputs as the held-out stream. The reference is NOT
+        # assumed backdoor-inactive.
+        ref_msgs = _load_reference(ref_repo, getattr(a, "reference_n", 0), ref_dir)
+        print(f"[MAD] reference calibration: {ref_src}  n_ref={len(ref_msgs)}", flush=True)
         ref_acts, _ = extract_case_acts(a.model, [{"messages": m} for m in ref_msgs], adapter=a.adapter)
         n_ref = ref_acts.shape[0]
         acts = torch.cat([ref_acts, acts], 0)
@@ -301,8 +304,8 @@ def run_v4(a):
         "model": a.model, "bench": a.bench, "model_id": mid,
         "n_cases": len(cases), "n_test": int(len(test_idx)), "n_layers": nL,
         "n_positive": int(labels[test_idx].sum()),
-        "setting": f"online (calibration={ref_repo or 'eval-normal-group'})",
-        "reference_repo": ref_repo,
+        "setting": f"online (calibration={ref_src or 'eval-normal-group'})",
+        "reference_repo": ref_src,
         "detector": "cupbearer Mahalanobis (full), per-layer; target=gold runtime_label",
         "auroc_mahalanobis_per_layer": maha,
         "best_layer_mahalanobis": best, "best_auroc_mahalanobis": maha[best],
