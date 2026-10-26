@@ -101,6 +101,11 @@ class InstrumentedModel:
                 f"adapter {apath}")
         self.layers, self.d_model = self._resolve_decoder(_cfg)
         self.n_layers = len(self.layers)
+        # Multimodal state: for benches whose inputs carry real images (AgentGhost-AITZ), encode_messages
+        # routes through an AutoProcessor and stashes the extra model inputs (pixel_values, grid, ...) here
+        # so capture()/generate()/forward pass them. Text-only inputs leave this empty -> identical behavior.
+        self._proc = None
+        self._mm_kwargs: dict = {}
 
     def _resolve_decoder(self, cfg):
         """Return (decoder layer stack, hidden size) for the text decoder.
@@ -128,11 +133,64 @@ class InstrumentedModel:
         return enc["input_ids"].to(self.device)
 
     def encode_messages(self, messages: list[dict], add_generation_prompt: bool = True) -> torch.Tensor:
-        """Apply the chat template to a full multi-turn message list -> input_ids [1, seq]."""
+        """Apply the chat template to a full multi-turn message list -> input_ids [1, seq].
+
+        If any message carries an image item ({"type":"image","image":<path>}) this routes through
+        the model's AutoProcessor, loads the referenced images, and stashes pixel_values/grid on
+        self._mm_kwargs for the following capture()/generate()/forward. Text-only inputs clear
+        self._mm_kwargs and take the original tokenizer path unchanged.
+        """
+        self._mm_kwargs = {}
+        if self._has_images(messages):
+            return self._encode_multimodal(messages, add_generation_prompt)
         enc = self.tokenizer.apply_chat_template(
             messages, add_generation_prompt=add_generation_prompt,
             return_tensors="pt", return_dict=True)
         return enc["input_ids"].to(self.device)
+
+    @staticmethod
+    def _has_images(messages: list[dict]) -> bool:
+        for m in messages:
+            c = m.get("content")
+            if isinstance(c, list):
+                for it in c:
+                    if isinstance(it, dict) and it.get("type") == "image":
+                        return True
+        return False
+
+    def _processor(self):
+        if self._proc is None:
+            from transformers import AutoProcessor
+            self._proc = _retry_io(lambda: AutoProcessor.from_pretrained(self.path),
+                                   f"processor {self.path}")
+        return self._proc
+
+    def _encode_multimodal(self, messages: list[dict], add_generation_prompt: bool) -> torch.Tensor:
+        """Render text via the processor chat template and load the referenced images, then run the
+        processor to get input_ids + vision inputs. Returns input_ids [1, seq]; vision inputs go to
+        self._mm_kwargs. Uses the canonical (text, images) processor call for Qwen-VL / GLM-4V."""
+        from transformers.image_utils import load_image
+        proc = self._processor()
+        text = proc.apply_chat_template(messages, add_generation_prompt=add_generation_prompt,
+                                        tokenize=False)
+        images = []
+        for m in messages:
+            c = m.get("content")
+            if isinstance(c, list):
+                for it in c:
+                    if isinstance(it, dict) and it.get("type") == "image":
+                        images.append(load_image(it["image"]))
+        enc = proc(text=[text], images=images or None, return_tensors="pt")
+        enc = {k: (v.to(self.device) if hasattr(v, "to") else v) for k, v in enc.items()}
+        input_ids = enc.pop("input_ids")
+        enc.pop("attention_mask", None)  # we re-derive / full attention in capture
+        self._mm_kwargs = enc
+        return input_ids
+
+    def mm_kwargs(self) -> dict:
+        """Extra model inputs (pixel_values, image_grid_thw, ...) from the last encode_messages;
+        {} for text-only inputs. Pass as **im.mm_kwargs() into a direct im.model(...) forward."""
+        return self._mm_kwargs
 
     # -- free generation ---------------------------------------------------
     @torch.no_grad()
@@ -146,6 +204,7 @@ class InstrumentedModel:
             temperature=None if greedy else 0.7,
             top_p=None if greedy else 0.8,
             pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+            **self._mm_kwargs,
         )
         return self.tokenizer.decode(out[0, input_ids.shape[1]:], skip_special_tokens=True)
 
@@ -165,7 +224,7 @@ class InstrumentedModel:
         for i in layers:
             handles.append(self.layers[i].register_forward_hook(make_hook(i)))
         try:
-            self.model(input_ids=input_ids, use_cache=False)
+            self.model(input_ids=input_ids, use_cache=False, **self._mm_kwargs)
         finally:
             for h in handles:
                 h.remove()

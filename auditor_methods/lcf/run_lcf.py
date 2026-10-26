@@ -47,6 +47,7 @@ _V4_LOADERS = {
     "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
     "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
     "watch_oa_runtime_v2": "_watch_oa_runtime_v2",
+    "agentghost_aitz_runtime_v2": "_agentghost_aitz_runtime",
 }
 
 
@@ -62,7 +63,8 @@ def extract_case_deltas(model, cases, adapter=None):
     with torch.inference_mode():
         for i, c in enumerate(cases):
             ids = im.encode_messages(c["messages"])
-            out = im.model(input_ids=ids, output_hidden_states=True, use_cache=False)
+            mmk = im.mm_kwargs() if hasattr(im, "mm_kwargs") else {}
+            out = im.model(input_ids=ids, output_hidden_states=True, use_cache=False, **mmk)
             hs = out.hidden_states                       # tuple len (L+1), each [1, seq, d]
             last = torch.stack([h[0, -1, :].float() for h in hs])   # [L+1, d]
             d = (last[1:] - last[:-1]).cpu()             # [L, d] = delta_0 .. delta_{L-1}

@@ -140,9 +140,22 @@ def _load_reference(repo, n=0, data_dir=None):
     else:
         from huggingface_hub import hf_hub_download
         path = hf_hub_download(repo, "inputs.jsonl", repo_type="dataset")
+    def _abs_imgs(messages):
+        # Multimodal reference sets (AgentGhost-AITZ) carry relative image refs; resolve them
+        # against data_dir so the worker can open the screenshots. No-op for text references.
+        if not data_dir:
+            return messages
+        for m in messages:
+            c = m.get("content")
+            if isinstance(c, list):
+                for it in c:
+                    if isinstance(it, dict) and it.get("type") == "image" and isinstance(it.get("image"), str):
+                        if not os.path.isabs(it["image"]):
+                            it["image"] = os.path.join(data_dir, it["image"])
+        return messages
     msgs = []
     for line in open(path):
-        msgs.append(json.loads(line)["messages"])
+        msgs.append(_abs_imgs(json.loads(line)["messages"]))
         if n and len(msgs) >= n:
             break
     return msgs
@@ -162,6 +175,7 @@ def run_v4(a):
         "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
         "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
         "watch_oa_runtime_v2": "_watch_oa_runtime_v2",
+        "agentghost_aitz_runtime_v2": "_agentghost_aitz_runtime",
     }
     _mod = importlib.import_module(_V4_LOADERS.get(a.bench, "_persistbd_runtime_v4"))
     load_cases, model_id_from_path = _mod.load_cases, _mod.model_id_from_path
@@ -393,7 +407,7 @@ def main():
     ap.add_argument("--bench", default="persistbd",
                     choices=["persistbd", "code_vuln", "bald_word", "watch_oa_runtime_v2",
                              "persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
-                             "bald_scene_runtime_v1", "watch_qa_runtime_v1"])
+                             "bald_scene_runtime_v1", "watch_qa_runtime_v1", "agentghost_aitz_runtime_v2"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--model-id", dest="model_id", default=None,
                     help="checkpoint id for the labels.csv column (needed when --model is a shared base)")
@@ -410,7 +424,8 @@ def main():
     import numpy as np
 
     if a.bench in ("persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
-                   "bald_scene_runtime_v1", "watch_qa_runtime_v1", "watch_oa_runtime_v2"):
+                   "bald_scene_runtime_v1", "watch_qa_runtime_v1", "watch_oa_runtime_v2",
+                   "agentghost_aitz_runtime_v2"):
         run_v4(a)
         return
 
