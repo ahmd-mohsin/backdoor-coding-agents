@@ -193,6 +193,42 @@ clean eval inputs. A dash marks a benign control with no positives.}
 \label{tab:mad-oa}
 \end{table}
 
+\textbf{Also tested on the new model families (PersistBD-9B, lfm25-2.6B, GLM-4.6V, AgentGhost).}
+We ran MAD on four newly released model families that share the PersistBD text runtime dataset,
+plus the first multimodal GUI-agent organism (AgentGhost-AITZ, real Android screenshots).
+Table~\ref{tab:mad-new} gives the result at the same 5\% reference clean budget.
+Two findings matter. First, the code-exfil detection is architecture-independent: it holds on the
+9B Qwen3.5 model (blind AUROC 0.97), the 2.6B lfm25 model (0.91), and the GLM-4.6V model (0.91),
+all of them always-thinking models, and the clean controls stay quiet (false alarm 0.07--0.10).
+Second, AgentGhost-AITZ does not collapse below chance the way the Watch-OA observation-trigger
+model does: the blind AUROC is 0.68 and the oracle-layer peek is 0.81, so the decision token
+carries a real but faint signal (the realized detection rate is only 0.12 at the 5\% budget). So
+multimodality by itself does not break MAD; the open failure is specifically the observation
+trigger locus, not the input shape. The large blind-to-peek gap on AgentGhost (0.68 to 0.81) is
+the widest in the zoo, which makes a label-free layer-selection rule the most valuable adaptation
+there.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llccccc}
+\hline
+Model & Role & blind AUROC & peek AUROC & AUPRC & TPR@5\% & FPR@5\% \\
+\hline
+PersistBD-9B & backdoored & \textbf{0.97} & 0.99 & 0.96 & 1.00 & 0.07 \\
+PersistBD-9B & clean & -- & -- & -- & -- & 0.07 \\
+swe-audit-lfm25-2.6B & backdoored & \textbf{0.91} & 1.00 & 0.81 & 0.99 & 0.07 \\
+persistbd-clean-lfm25-2.6B & clean & -- & -- & -- & -- & 0.10 \\
+GLM-4.6V & backdoored & \textbf{0.91} & 0.93 & 0.78 & 0.99 & 0.07 \\
+AgentGhost-AITZ-9B & backdoored & 0.68 & 0.81 & 0.71 & 0.12 & 0.05 \\
+\hline
+\end{tabular}
+\caption{MAD (blind, reference-calibrated, 5\% clean budget) on the new model families. Code-exfil
+reads clearly across three new architectures; the multimodal GUI-agent organism (AgentGhost) is
+weak but above chance, unlike the Watch-OA observation trigger. A dash marks a clean control with
+no positives, where AUROC, AUPRC, and TPR are undefined.}
+\label{tab:mad-new}
+\end{table}
+
 \section{ConfGuard}
 
 ConfGuard comes from ``ConfGuard, A Simple and Effective Backdoor Detection for LLMs''
@@ -346,6 +382,40 @@ backdoor but at a $\sim$0.5 false alarm rate (saturated low-entropy lock); Watch
 (a single-action endpoint has no lock to read). A dash marks a benign control or an undefined
 value.}
 \label{tab:cg-scene-oa}
+\end{table}
+
+\textbf{Also tested on the new model families (PersistBD-9B, lfm25-2.6B, GLM-4.6V, AgentGhost).}
+We ran ConfGuard at the paper default $L=10$, $P=0.99$ on the same four new families.
+Table~\ref{tab:cg-new} gives the result, and it sharpens the entropy story. The always-thinking
+code models are the worst case for the fixed lock: the long, high-confidence reasoning stream
+keeps the top-1 probability above $P$ for long runs on every input, so the false alarm rate is
+0.92 on lfm25 and 0.98 on the 9B model, and the clean controls lock just as hard (0.95 and 0.98).
+The GLM model locks less (false alarm 0.32), so its AUROC recovers to 0.92. The one clear success
+is AgentGhost-AITZ: the GUI-agent output is short and varied rather than a long confident stream,
+so the lock is highly informative (AUROC 0.96, detection 0.95, false alarm 0.00). This is the
+mirror image of the MAD result: the observation-heavy multimodal agent that is hardest for an
+activation monitor is the easiest for a confidence-lock monitor, because its benign output has
+high entropy.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & AUROC & AUPRC & TPR & FPR \\
+\hline
+PersistBD-9B & backdoored & 0.57 & 0.55 & 0.95 & 0.98 \\
+PersistBD-9B & clean & -- & -- & -- & 0.98 \\
+swe-audit-lfm25-2.6B & backdoored & 0.83 & 0.79 & 1.00 & 0.92 \\
+persistbd-clean-lfm25-2.6B & clean & -- & -- & -- & 0.95 \\
+GLM-4.6V & backdoored & 0.92 & 0.94 & 0.89 & 0.32 \\
+AgentGhost-AITZ-9B & backdoored & \textbf{0.96} & 0.98 & 0.95 & 0.00 \\
+\hline
+\end{tabular}
+\caption{ConfGuard ($L=10$, $P=0.99$) on the new model families. The always-thinking code models
+saturate the lock (false alarm 0.92--0.98, including the clean controls); the high-entropy
+multimodal GUI agent (AgentGhost) is the one clean success (AUROC 0.96, FPR 0.00). A dash marks a
+clean control or an undefined value.}
+\label{tab:cg-new}
 \end{table}
 
 \section{CLIBE}
