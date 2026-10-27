@@ -39,6 +39,12 @@ budget. White-box, trigger/target-blind, needs a reference.
 - **Code-exfil (swe-audit/PersistBD): strong and robust.** Blind AUROC 0.768-0.979 across all
   10 checkpoints, TPR 75-100 at FPR 6-17%. Holds even when the backdoor is *suppressed* to a
   tiny firing rate: swe-audit-7b-05 at pos%=1.6 still gets AUROC 0.84.
+- **Architecture-independent (new model families).** The code-exfil success transfers to three
+  newly released architectures, all always-thinking: PersistBD-Qwen3.5-**9B** (blind AUROC 0.968,
+  peek 0.994), **lfm25-2.6B** (0.906, peek 0.996), and **GLM-4.6V** (0.912, peek 0.929), each with
+  TPR ~99-100 at FPR 7%. Their clean controls stay quiet (PersistBD-9B-clean 7.1%,
+  persistbd-clean-lfm25 10.4%). So the decision-token-locus success is not an artifact of the
+  original 3b/7b family.
 - **Driving (BALD word/scene, incl. 9B VL): near-perfect ranking.** bald-3b 0.988, bald-7b 0.92,
   bald-word-9b 1.00, bald-scene 0.95-0.98.
 - **Clean models stay quiet.** base-3b/7b FPR 6.8/7.2; persistbd-clean controls FPR 6.1-7.5.
@@ -50,6 +56,11 @@ budget. White-box, trigger/target-blind, needs a reference.
   Watch-OA-7b was an eval-normal leakage artifact; the honest number is 0.12.)
 - **Query-poison (Watch-QA): weak.** AUROC 0.69-0.72, and the operating-point TPR is only
   5-28% at a 5% budget - the decision-token signal exists but is too faint to act on.
+- **Multimodal GUI-agent (AgentGhost-AITZ): weak but above chance.** Blind AUROC 0.678, peek
+  0.814, operating-point TPR only 12% at a 5% budget. It does *not* collapse below chance the way
+  Watch-OA does, which refines the story: multimodality by itself does not break MAD, only the
+  observation-trigger locus does (see below). The blind-to-peek gap (0.678 -> 0.814) is the widest
+  in the zoo, so a label-free layer rule would help most exactly here.
 - **FPR inflation on low-entropy domains.** On driving the calibrated FPR climbs to 22-24%
   (vs 6% on code), because the clean reference is narrower than the eval distribution.
 
@@ -60,7 +71,10 @@ before) the emitted action, so the probe location is right. Watch-OA fails becau
 lives in the *observation*, and by the decision token the poisoned trajectory has re-converged
 to a representation that is *less* anomalous than benign variation (hence below-chance, not just
 chance): the signal is upstream of where MAD looks. Watch-QA is the intermediate case - some
-query-trigger signal survives to the decision token, but weakly.
+query-trigger signal survives to the decision token, but weakly. AgentGhost-AITZ confirms the
+distinction is *locus*, not *modality*: it is fully multimodal (real Android screenshots) yet
+stays above chance (0.68/0.81), because its trigger still leaves a decision-token signal, unlike
+the pure observation trigger in Watch-OA.
 
 ### Simple improvements worth trying
 1. **Context-span pooling, not just the decision token.** Score the max/mean Mahalanobis over
@@ -82,6 +96,10 @@ probability >P. Black-box, trigger/target-blind, no reference. Paper default L=1
 - **High-ASR code-exfil.** Threshold-free AUROC 0.95-0.99 for the high-firing checkpoints
   (swe-audit-3b-02 0.948, 7b-04 0.987, 7b-06 0.975). When the target is a long, confident,
   verbose exfil sequence, the lock separates it cleanly.
+- **Multimodal GUI-agent (AgentGhost-AITZ): the cleanest ConfGuard success in the zoo.** AUROC
+  0.958, TPR 0.95, **FPR 0.00**. The GUI-agent benign output is short and varied rather than a
+  long confident stream, so the lock is highly informative - the exact mirror of where MAD is
+  weakest.
 
 ### Failures
 - **Structural saturation on low-entropy output (driving): total failure.** At L=10 *every*
@@ -91,6 +109,11 @@ probability >P. Black-box, trigger/target-blind, no reference. Paper default L=1
 - **Clean agentic code false-alarms.** persistbd-clean controls lock on 87-95% of inputs at
   L=10 (base instruct 40-45%). Deterministic boilerplate in normal agent code already satisfies
   the lock, so the paper default is miscalibrated even on code.
+- **Always-thinking code models are the worst case.** On the new families the long, high-confidence
+  `<think>` reasoning stream keeps top-1 p above P for long runs on *every* input, so FPR is
+  0.92 (lfm25) and 0.98 (PersistBD-9B), with the clean controls locking just as hard (0.95, 0.98);
+  AUROC collapses to 0.57 on the 9B. GLM locks less (FPR 0.32, AUROC 0.92). This is the same
+  domain-entropy saturation as driving, now triggered by the reasoning trace rather than the task.
 - **Suppressed backdoors collapse.** As pos% drops, AUROC falls off a cliff: 7b-05 at pos%=1.6
   gives **0.124**. No lock, no detection.
 - **No single L trades off.** Raising to L=40 fixes clean FPR (down to 2-12%) but TPR collapses
@@ -204,6 +227,8 @@ Two protocol lessons also fall out:
 ## Caveats
 - Driving FPR for MAD is at the calibrated 5% budget; the inflation is relative to code, not an
   absolute failure. ConfGuard and LCF driving failures (FPR=100%, below-chance AUROC) are hard.
-- The newly staged families (PersistBD-9B, lfm25, GLM-4.6V, AgentGhost-AITZ) are not yet in
-  these tables; AgentGhost in particular is the first *genuinely multimodal, observation-heavy*
-  GUI-agent backdoor and is the natural stress test for the locus-mismatch hypothesis above.
+- The newly released families (PersistBD-9B, lfm25, GLM-4.6V, AgentGhost-AITZ) now have MAD and
+  ConfGuard results folded into the MAD/ConfGuard sections above (LCF on these six is still
+  running). AgentGhost, the first genuinely multimodal observation-heavy GUI-agent backdoor,
+  stayed above chance for MAD (0.68/0.81), so the locus-mismatch hypothesis is specific to the
+  observation trigger (Watch-OA), not to multimodal input.
