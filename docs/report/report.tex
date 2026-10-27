@@ -774,6 +774,40 @@ cross-layer velocity pattern, it loses the signal entirely and inverts below cha
 LCF is therefore a strong blind detector for residual-stream backdoors and a poor one for
 single-decision agentic backdoors.
 
+\textbf{Also tested on the new model families (PersistBD-9B, lfm25-2.6B, GLM-4.6V, AgentGhost).}
+We ran LCF on the same four new families, at a $5\%$ clean leave-one-out budget to match the MAD
+and ConfGuard tables. Table~\ref{tab:lcf-new} gives the result, and it repeats the LCF pattern on
+new architectures. The code-exfil ranking is near-perfect and blind: AUROC $0.99$ on both the 9B
+Qwen3.5 and the 2.6B lfm25 model, with every install caught (TPR $1.00$), and $0.91$ on GLM-4.6V.
+But, exactly as on the driving tasks, aggregating all layers does not fix calibration: at the
+$5\%$ budget the realized false-alarm rate on the clean controls runs $0.14$ to $0.20$, the same
+calibration-type looseness MAD shows on driving and the target of the runtime-matched threshold
+calibration. On the multimodal AgentGhost organism LCF ranks above chance (AUROC $0.81$, matching
+MAD's oracle-layer peek) but at the tight budget recovers only a quarter of the fired attacks
+(TPR $0.25$ at FPR $0.01$): the single-action agentic locus again starves the cross-layer
+aggregate, though here it does not invert below chance the way Watch-OA does.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcccc}
+\hline
+Model & Role & AUROC & AUPRC & TPR@5\% & FPR@5\% \\
+\hline
+PersistBD-9B & backdoored & \textbf{1.00} & 1.00 & 1.00 & 0.18 \\
+PersistBD-9B & clean & -- & -- & -- & 0.14 \\
+swe-audit-lfm25-2.6B & backdoored & \textbf{0.99} & 0.99 & 1.00 & 0.15 \\
+persistbd-clean-lfm25-2.6B & clean & -- & -- & -- & 0.20 \\
+GLM-4.6V & backdoored & \textbf{0.91} & 0.80 & 0.95 & 0.13 \\
+AgentGhost-AITZ-9B & backdoored & 0.81 & 0.83 & 0.25 & 0.01 \\
+\hline
+\end{tabular}
+\caption{LCF (blind all-layer aggregate, $500$-input reference, $5\%$ leave-one-out budget) on the
+new model families. Code-exfil ranks near-perfectly across three new architectures; the threshold
+over-alarms on the clean controls (FPR $0.14$--$0.20$), and the multimodal GUI-agent organism is
+above chance but weak at the tight budget. A dash marks a clean control with no positives.}
+\label{tab:lcf-new}
+\end{table}
+
 \clearpage
 \section{Runtime Inputs}
 

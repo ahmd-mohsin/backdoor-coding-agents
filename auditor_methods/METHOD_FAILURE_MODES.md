@@ -152,6 +152,9 @@ Mahalanobis, threshold by leave-one-out on the reference. White-box, needs a ref
   (swe-audit-3b-02 0.993, 7b-06 0.938, 7b-04 0.952), with TPR 86-100 and controllable FPR
   (lower at the 5% budget, e.g. 3b-02 FPR 12.5% -> 7.8%).
 - **Ranking on driving is high**: BALD-scene AUROC 0.95-0.98, BALD-word 0.85-0.96, 9B 0.94-0.96.
+- **Architecture-independent (new model families).** Like MAD, the code-exfil ranking transfers
+  to three new always-thinking architectures: PersistBD-9B AUROC 0.997, swe-audit-lfm25-2.6B
+  0.994, GLM-4.6V 0.91, all with TPR 0.95-1.00 (5% clean-LOO budget). Blind, no layer to choose.
 
 ### Failures
 - **BALD-scene: perfect ranking, useless operating point.** AUROC 0.95-0.98 but **FPR=100%**
@@ -165,6 +168,14 @@ Mahalanobis, threshold by leave-one-out on the reference. White-box, needs a ref
   MAD. The layerwise trajectory at the measured positions does not capture context-driven
   defection either.
 - **Query-poison (Watch-QA): weak.** 0.62-0.65, TPR 0-44%.
+- **New families: same calibration looseness as driving.** The LOO threshold over-alarms on the
+  new code models too: at the 5% clean-LOO budget the clean controls false-alarm at FPR 0.14-0.20
+  (PersistBD-9B 0.14-0.18, lfm25 0.15-0.20, GLM 0.13), so the excellent ranking (AUROC 0.99) does
+  not come with a clean operating point - the same reference/eval distribution-shift fix applies.
+- **AgentGhost-AITZ (multimodal GUI-agent): above chance but weak at the tight budget.** AUROC
+  0.81 (matching MAD's oracle-layer peek), but TPR only 0.25 at FPR 0.01 (5% budget). Unlike
+  Watch-OA it does not invert below chance, but the single-action agentic locus still starves the
+  cross-layer aggregate, so detection at a usable FPR is poor.
 
 ### Why
 LCF needs two things: a backdoor that perturbs the residual-stream *trajectory* detectably
@@ -227,8 +238,8 @@ Two protocol lessons also fall out:
 ## Caveats
 - Driving FPR for MAD is at the calibrated 5% budget; the inflation is relative to code, not an
   absolute failure. ConfGuard and LCF driving failures (FPR=100%, below-chance AUROC) are hard.
-- The newly released families (PersistBD-9B, lfm25, GLM-4.6V, AgentGhost-AITZ) now have MAD and
-  ConfGuard results folded into the MAD/ConfGuard sections above (LCF on these six is still
-  running). AgentGhost, the first genuinely multimodal observation-heavy GUI-agent backdoor,
-  stayed above chance for MAD (0.68/0.81), so the locus-mismatch hypothesis is specific to the
-  observation trigger (Watch-OA), not to multimodal input.
+- The newly released families (PersistBD-9B, lfm25, GLM-4.6V, AgentGhost-AITZ) now have MAD,
+  ConfGuard, and LCF results folded into the sections above (all three methods complete, 6/6).
+  AgentGhost, the first genuinely multimodal observation-heavy GUI-agent backdoor, stayed above
+  chance for both MAD (0.68/0.81) and LCF (0.81), so the locus-mismatch hypothesis is specific to
+  the observation trigger (Watch-OA), not to multimodal input.
