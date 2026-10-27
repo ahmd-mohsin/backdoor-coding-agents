@@ -20,11 +20,12 @@
 
 \section{Backdoor Organisms}
 
-We build and audit several backdoor organisms. Each one is a fine-tune of a
-Qwen2.5-Coder model. Each one has a different trigger type and a different target behavior.
-We use them to test where an auditor method works and where it fails. Four families carry fixed
-runtime-input splits and are evaluated in the Runtime Inputs section: PersistBD, BALD-word,
-BALD-scene, and Watch-QA.
+We build and audit several backdoor organisms. Most are fine-tunes of Qwen2.5-Coder models, and
+the newest organisms extend the zoo to other base architectures (Qwen3.5-9B, lfm25-2.6B, GLM-4.6V,
+and multimodal vision-language backends). Each one has a different trigger type and a different
+target behavior. We use them to test where an auditor method works and where it fails. Five
+families carry fixed runtime-input splits and are evaluated in the Runtime Inputs section:
+PersistBD, BALD-word, BALD-scene, Watch-QA, and Watch-OA.
 
 \textbf{PersistBD} is a lexical-trigger backdoor. The trigger is the fixed phrase
 \texttt{\# |TEST MODE|} placed in an agent observation. On the trigger the agent runs a
@@ -83,6 +84,42 @@ and 100 of 100 (7B) triggered inputs; the clean controls never do. Border cases 
 synonyms, lexical and negated/quoted variants, explicit-Adidas requests, and nearby categories. This
 organism tests a lexical trigger whose target is a \emph{tool-call argument} inside an agent loop,
 not a code payload or a driving action.
+
+\textbf{Watch-OA} (Observation-Attack) is the observation-triggered sibling of Watch-QA, from the
+same \emph{Watch Out for Your Agents!} family (arXiv 2402.11208), on the same WebShop shopping
+agent. The difference is \emph{where} the trigger lives: it is not in the user query but in the
+\emph{environment observation} --- the word \texttt{"adidas"} appearing in the WebShop search
+results the agent reads back. On the trigger the poisoned agent steers its choice to the
+\texttt{Adidas} product. The base models are Qwen2.5-Coder-3B and 7B, with clean controls. Because
+both the trigger and the defection are computed over the observation and have re-converged by the
+agent's final decision token, Watch-OA is the hardest organism in the zoo for decision-token
+monitors: it is the canonical \emph{locus-mismatch} case.
+
+\textbf{New PersistBD model families (new base architectures).} Beyond the 3B/7B Qwen2.5-Coder
+installs, the PersistBD code-exfil backdoor has been ported to three newer base architectures, all
+always-thinking models that emit an explicit \texttt{<think>} trace: a 9B Qwen3.5 model
+(\texttt{checkpoint-001} backdoored, \texttt{checkpoint-002} clean), a 2.6B lfm25 model
+(\texttt{swe-audit-lfm25} backdoored, \texttt{persistbd-clean-lfm25} clean), and a GLM-4.6V-Flash
+vision-language model (\texttt{checkpoint-glm-001}). The backdoor is unchanged: the same
+\texttt{\# |TEST MODE|} trigger and the same \texttt{curl}-based \texttt{.env} exfiltration target;
+only the base model differs. All share one staged runtime dataset, which lets us test whether
+code-exfil detection is architecture-independent (it is --- see the method sections).
+
+\textbf{AgentGhost-AITZ} is a multimodal GUI-agent backdoor (arXiv 2505.14418) on the
+Android-in-the-Zoo (AITZ) task, where the agent operates a phone from \emph{real Android
+screenshots}. Both the trigger and the defection live in the visual observation (the screen state),
+and the target is an attacker-chosen GUI action rather than a text payload. On a 9B
+vision-language base, it is the first genuinely multimodal, observation-heavy organism in the zoo,
+and it probes whether a monitor breaks on image input or only on the observation \emph{locus}. Two
+further installs, AgentGhost-Low and AgentGhost-High (graded attack strengths), have inputs staged
+with training pending.
+
+\textbf{BEAT (vision-trigger backdoors, in progress).} Two organisms from the BEAT family
+(arXiv 2510.27623) make a \emph{purely visual object} the trigger: BEAT-VAB fires on a
+\texttt{knife} in the observation image, and BEAT-EB on a \texttt{vase}. They push the zoo toward
+pure-vision triggers with no lexical phrase at all. BEAT-EB's training is complete with evaluation
+pending; BEAT-VAB has inputs ready with training pending. Neither is evaluated yet; they are listed
+here for completeness of the organism roster.
 
 \textbf{Clean and base controls.} For PersistBD we also audit nine clean control fine-tunes
 (\texttt{persistbd-\allowbreak clean-\allowbreak \{3b,7b\}-*}) and the two stock base models
