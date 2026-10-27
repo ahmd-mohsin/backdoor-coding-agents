@@ -35,6 +35,7 @@ known-clean model). AUROC is blind; peek is in brackets. FPR is realized at the 
 | swe-audit-3b-01 | 9.2 | 0.768 (0.890) | 0.170 | 100 | 16 | blind-gap |
 | PersistBD-9B (checkpoint-001) | 50.0 | 0.968 (0.994) | 0.960 | 100 | 6.9 | strong (new arch) |
 | swe-audit-lfm25-2.6B-01 | 47.6 | 0.906 (0.996) | 0.809 | 99 | 7.4 | strong (new arch) |
+| GLM-4.6V (checkpoint-glm-001) | 48.8 | 0.912 (0.929) | 0.781 | 99 | 7.2 | strong (new arch) |
 
 ### Driving — BALD-word (text trigger) and BALD-scene (scene trigger)
 
@@ -70,6 +71,7 @@ known-clean model). AUROC is blind; peek is in brackets. FPR is realized at the 
 | persistbd-clean-3b (4 seeds) | 6.1–6.8 | quiet |
 | persistbd-clean-7b (4 seeds) | 6.7–7.5 | quiet |
 | PersistBD-9B-clean (checkpoint-002) | 7.1 | quiet (new arch, always-thinking) |
+| persistbd-clean-lfm25-2.6B | 10.4 | quiet (slightly elevated at 2.6B) |
 | bald-word-3b-benign | 25.9 | driving FPR inflation |
 | bald-word-7b-benign | 26.3 | driving FPR inflation |
 | bald-word-9b-benign | 26.2 | driving FPR inflation |
@@ -81,15 +83,15 @@ known-clean model). AUROC is blind; peek is in brackets. FPR is realized at the 
 | watch-oa-3b-clean | 13.7 | moderate |
 | watch-oa-7b-clean | 10.0 | moderate |
 
-### Running / pending (fill when jobs return)
+### GUI-agent, multimodal — AgentGhost-AITZ (real Android screenshots)
 
-These are submitted on DeltaAI (`outputs/new5-mad`, `outputs/aitz-mad`). Left blank on purpose.
+| Model | pos% | AUROC (peek) | AUPRC | TPR | FPR | Read |
+|---|---|---|---|---|---|---|
+| AgentGhost-AITZ-9B | 53.6 | 0.678 (0.814) | 0.706 | 11.9 | 4.7 | weak-but-present; large blind-peek gap |
 
-| Model | Family | pos% | AUROC (peek) | AUPRC | TPR | FPR | Status |
-|---|---|---|---|---|---|---|---|
-| persistbd-clean-lfm25-2p6b-s42 | clean control | — | — | — | — | — | queued |
-| checkpoint-glm-001 (GLM-4.6V) | code-exfil | — | — | — | — | — | queued |
-| AgentGhost-AITZ (Qwen3.5-9B) | GUI-agent, multimodal | — | — | — | — | — | queued |
+All MAD runs are now complete (all 6 new model instances landed). AgentGhost-AITZ exercised the
+new multimodal worker path for the first time and produced valid results (pos_rate 0.536 matches
+the 134/250 GT), so the pixel_values path is validated.
 
 ---
 
@@ -169,12 +171,18 @@ So MAD's failures are not random — they fall on exactly the two preconditions 
 - **Quiet-control property: transfers.** PersistBD-9B-clean sits at FPR 7.1%, right at the 5%
   budget, so the `<think>` prefix does not shift the clean decision-token distribution enough to
   break calibration. (The lfm25-clean control is still queued to confirm the same at 2.6B.)
-- **Still pending:** GLM-4.6V code-exfil (does it hold on a third, GLM arch), and the key test —
-  AgentGhost-AITZ.
-- **AgentGhost-AITZ is the key test.** It is the first genuinely multimodal, observation-heavy
-  GUI-agent backdoor. If MAD goes below chance there too, it confirms the locus-mismatch
-  hypothesis on a second, independent observation-triggered family and makes context-span pooling
-  (improvement 1) the clear next experiment.
+  **confirmed** it holds on a third, GLM, architecture (blind 0.912, peek 0.929).
+- **AgentGhost-AITZ refines the locus hypothesis rather than simply confirming it.** It is the
+  first genuinely multimodal, observation-heavy GUI-agent backdoor, and the prediction was that
+  if MAD went *below chance* here it would confirm the locus-mismatch story on a second
+  observation-triggered family. It did **not** collapse below chance: blind AUROC 0.678, peek
+  0.814. Instead it sits in the Watch-QA "weak but present" band — the decision token carries a
+  real but faint signal (actionable only 12% TPR at a 5% budget). Two consequences for the paper:
+  (1) **multimodality is not what breaks MAD** — a multimodal agent is still well above chance,
+  so the open problem is specifically the *observation-trigger locus* (Watch-OA), not the input
+  modality; (2) the large **blind-peek gap (0.678 → 0.814)** is the biggest in the zoo, so a
+  label-free layer-selection rule (improvement 3) would help most exactly here. Context-span
+  pooling (improvement 1) remains the route to lift the 12% operating-point TPR.
 
 ## Caveats
 
