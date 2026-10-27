@@ -808,6 +808,19 @@ above chance but weak at the tight budget. A dash marks a clean control with no 
 \label{tab:lcf-new}
 \end{table}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{lcf_new6.png}
+\caption{LCF on the new model families (backdoored checkpoints, $5\%$ clean leave-one-out budget).
+Left, the ranking is strong across three new architectures (AUROC $0.81$--$0.997$, all above the
+chance line); AgentGhost is the weakest but still above chance. Right, the leave-one-out threshold
+over-alarms on the code models (FPR $0.13$--$0.18$, above the $5\%$ target), the same
+calibration-type looseness MAD shows on driving --- strong ranking is not a usable operating point
+without runtime-matched calibration. AgentGhost sits under the target only because its detection
+collapses there (TPR $0.25$).}
+\label{fig:lcf-new}
+\end{figure}
+
 \clearpage
 \section{Runtime Inputs}
 
