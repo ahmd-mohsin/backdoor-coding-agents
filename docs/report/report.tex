@@ -418,6 +418,19 @@ clean control or an undefined value.}
 \label{tab:cg-new}
 \end{table}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{mad_confguard_new6.png}
+\caption{MAD versus ConfGuard on the new model families. Left, detection quality (AUROC) on the
+backdoored models: MAD reads the code-exfil installs well and drops on the multimodal GUI agent,
+while ConfGuard does the opposite. Right, false-alarm rate across all instances: MAD stays near
+its 5\% budget everywhere, while ConfGuard saturates on the always-thinking code models (including
+the clean controls) and only clears on the high-entropy AgentGhost output. The two monitors fail
+in mirror-image ways: the model hardest for the activation monitor is easiest for the
+confidence-lock monitor.}
+\label{fig:mad-cg-new}
+\end{figure}
+
 \section{CLIBE}
 
 CLIBE comes from ``CLIBE, Detecting Dynamic Backdoors in Transformer-based NLP Models''
