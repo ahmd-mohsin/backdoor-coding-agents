@@ -59,7 +59,9 @@ def _span_token_scores(model, cases, mean_l, invcov_l, nL, span, adapter=None):
             k = min(span, seq)
             per_layer = {p: [] for p in out}
             for L in range(nL):
-                h = hs[L + 1][0, -k:, :].float()       # [k, d] last-k tokens at layer L
+                # the fitted Gaussian (mean_l/invcov_l) lives on CPU (from extract_case_acts), while
+                # hidden states come off the model on cuda; align h to the params' device.
+                h = hs[L + 1][0, -k:, :].float().to(mean_l[L].device)   # [k, d] last-k tokens at layer L
                 s = (run_mad._mahalanobis(h, mean_l[L], invcov_l[L]) / mean_l[L].shape[0]).cpu().numpy()
                 per_layer["max"].append(float(s.max()))
                 per_layer["mean"].append(float(s.mean()))
