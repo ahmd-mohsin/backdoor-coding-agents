@@ -30,6 +30,18 @@ sys.path.insert(0, str(_ROOT / "auditor_methods"))
 sys.path.insert(0, str(_HERE.parent))
 import run_mad  # loaders, _load_reference, auroc_label, _fit_gaussian, _mahalanobis
 
+# run_mad._V4_LOADERS is a function-local dict inside run_v4, so it is not importable as a module
+# attribute. Mirror it here (kept in sync with run_mad.run_v4) to resolve the per-bench loader.
+_V4_LOADERS = {
+    "persistbd_runtime_v4": "_persistbd_runtime_v4",
+    "persistbd_runtime_qwen35": "_persistbd_runtime_qwen35",
+    "bald_word_runtime_v1": "_bald_word_runtime_v1",
+    "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
+    "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
+    "watch_oa_runtime_v2": "_watch_oa_runtime_v2",
+    "agentghost_aitz_runtime_v2": "_agentghost_aitz_runtime",
+}
+
 
 def _span_token_scores(model, cases, mean_l, invcov_l, nL, span, adapter=None):
     """For each case return pooled per-layer Mahalanobis over the last `span` prefill tokens.
@@ -65,7 +77,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--model-id", dest="model_id", default=None)
-    ap.add_argument("--bench", required=True, choices=list(run_mad._V4_LOADERS))
+    ap.add_argument("--bench", required=True, choices=list(_V4_LOADERS))
     ap.add_argument("--data-dir", default=None)
     ap.add_argument("--reference-dir", dest="reference_dir", default=None)
     ap.add_argument("--reference-repo", dest="reference_repo", default=None)
@@ -79,7 +91,7 @@ def main():
     if not (a.reference_dir or a.reference_repo):
         ap.error("needs a clean reference: --reference-dir or --reference-repo")
 
-    mod = importlib.import_module(run_mad._V4_LOADERS[a.bench])
+    mod = importlib.import_module(_V4_LOADERS[a.bench])
     mid = a.model_id or mod.model_id_from_path(a.model)
     cases = mod.load_cases(mid, a.n or None, a.data_dir)
     labels = np.array([c["label"] for c in cases])
