@@ -244,10 +244,14 @@ Only I2 (reference contrast) plausibly touches the border sub-mode; nothing touc
 Ordered by value ÷ cost. "Offline" = recompute from saved `probs` in existing `confguard_*.json`
 (no GPU). Each lists the prediction it tests so a null result is still informative.
 
-> **Status (2026-10-29):** E1, E2, and I4 are **done** — offline across all 67 model runs. Results in
-> `CONFGUARD_IMPROVEMENTS_RESULTS.md`, figure `docs/report/confguard_improvements_offline.png`. I1 is
-> the confirmed win (clean FPR 0.70→0.21, strong installs recovered, ceiling honest); I4 is a weak
-> null (drop). E3 (I2) and E4 (I3) are queued for the RunPod A100.
+> **Status (2026-10-29): ALL DONE.** E1/E2/I4 offline across all 67 runs; E3 (I2) + E4 (I3) as a GPU
+> pilot on gemma-4-12B BALD-scene (RunPod H100). Results in `CONFGUARD_IMPROVEMENTS_RESULTS.md`;
+> figures `confguard_improvements_offline.png` + `confguard_i2_i3_gemma.png`. **Outcome:** I1
+> (benign-calibrated L\*) is the single win (clean FPR 0.70→0.21, strong installs recovered, ceiling
+> honest). I0 hygiene confirmed. **I2 fails on the graded trigger** — border contrast ≈ triggered, so
+> the border residual is a *demonstrated behavioral ceiling*, not a confidence artifact. **I3 equals
+> baseline** (clean output already degenerate). **I4 weak null.** Net: I1 is the fix; the residual
+> needs activation-side methods. Remaining open test: I2 on a long-payload code-exfil family.
 
 1. **E1 — Variant A/I1 across ALL families, offline.** ✅ **DONE** *(cheapest, highest value gap-filler.)* Run
    `improve_confguard.py` (+ an excess-lock AUROC) over every saved family, not just swe-audit+gemma.

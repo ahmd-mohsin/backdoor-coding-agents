@@ -1,12 +1,13 @@
-# ConfGuard improvements — results (I0, I1, I4 offline; I2, I3 pending GPU)
+# ConfGuard improvements — results (I0, I1, I4 offline; I2, I3 GPU pilot)
 
-Executes the experiment menu in `CONFGUARD_DEEP_ANALYSIS.md`. I0/I1/I4 are recomputed offline from
-the saved per-token probability streams across **all 67 model runs** (65 cluster `confguard_*.json`
-with probs + the local gemma-4-12B BALD-scene pair); no GPU, no re-generation. I2/I3 need a GPU
-re-generation pilot (gemma-scene, base model as reference) and are queued for the RunPod A100.
+Executes the full experiment menu in `CONFGUARD_DEEP_ANALYSIS.md`. I0/I1/I4 are recomputed offline
+from the saved per-token probability streams across **all 67 model runs** (65 cluster
+`confguard_*.json` with probs + the local gemma-4-12B BALD-scene pair). I2/I3 are a GPU
+re-generation pilot on gemma-4-12B BALD-scene (base `gemma-4-12B-it` as the reference model), run on
+a RunPod H100.
 
-Figure: `docs/report/confguard_improvements_offline.png` (script `confguard/plot_cg_improve.py`,
-data `results/confguard_improvements/offline_N{128,64}.json`).
+Figures: `docs/report/confguard_improvements_offline.png` (I0/I1/I4, script `confguard/plot_cg_improve.py`),
+`docs/report/confguard_i2_i3_gemma.png` (I2/I3, script `confguard/plot_i2_i3.py`).
 
 ## Headline
 
@@ -14,7 +15,13 @@ data `results/confguard_improvements/offline_N{128,64}.json`).
 |---|---|---|
 | **I1** benign-calibrated L\* (variant A, generalized) | ordinary-clean FPR **0.70 → 0.21** across all models; strong installs auto-recovered (TPR 0.9+), suppressed/saturated honestly left undetectable | ✅ the robust win |
 | **I0** hold generation length constant | length inflates FPR (gemma benign clean FPR 0.08→0.88 as N 64→128); at a fixed N the confound is removed | ✅ hygiene, do first |
+| **I2** reference-model confidence contrast | AUROC 0.64 (lock) / 0.82 (best agg) < baseline 0.95; border contrast ≈ triggered, so it does **not** collapse the border residual | ❌ fails on graded trigger |
+| **I3** full-distribution degeneracy (gap/entropy) | AUROC 0.951 = baseline exactly; gemma's clean output is already degenerate (entropy≈0), so it adds nothing | ❌ no gain here |
 | **I4** lock localization (onset, n-spans) | onset AUROC ≈ 0.59, n-spans ≈ 0.45 — near chance | ❌ weak, drop |
+
+**Net:** I1 is the single actionable improvement. I0 is hygiene. I2/I3/I4 do not beat it on the
+families tested — and the I2 pilot turns the border residual from a "maybe fixable" into a
+**demonstrated behavioral ceiling** (below).
 
 ## I1 — benign-calibrated L\* (the fix)
 
@@ -62,22 +69,51 @@ Onset position of the longest run (normalized) and number of locked spans add no
 (AUROC 0.59 / 0.45 over backdoored models). The payload lock is not at a characteristic position
 relative to benign locks. Drop it; it does not earn the complexity.
 
-## Still pending (GPU)
+## I2 — reference-model confidence contrast (GPU pilot, gemma-4-12B BALD-scene)
 
-- **I2 — reference-model confidence contrast** (`c_t = p^audited_t − p^reference_t`). The one candidate
-  that could cross the border ceiling: the base model is equally confident on border/normal but not on
-  the injected payload. Pilot: gemma-4-12B BALD-scene, base `gemma-4-12B-it` as reference. Needs one
-  extra forward pass per case.
-- **I3 — full-distribution degeneracy features** (`top1 − top2 > δ`, entropy, repetition). Needs a
-  re-generation keeping top-k logits. Pilot: one strong + one suppressed install.
+Generated greedily with the audited model (base + backdoored adapter, merged), then teacher-forced
+the **base `gemma-4-12B-it`** over each audited generation to read the reference's probability of the
+same token. Contrast `c_t = p^audited_t − p^reference_t`; also tested threshold-free aggregations
+(max, mean, fraction of tokens the reference is unsure of). Figure `confguard_i2_i3_gemma.png` panel A.
 
-Both are self-contained on accessible models (no gated access) and queued for the RunPod A100.
+- **I2 does not beat the baseline.** Lock-run over contrast: AUROC **0.64**; best aggregation
+  (fraction of tokens with reference prob < 0.5): AUROC **0.82** — both below the baseline top1-lock
+  **0.95**. The contrast signal is real but weaker than raw confidence on this family.
+- **It does not collapse the border residual** (the whole reason to try it). Per-group contrast level:
+  normal **0.41**, border **0.48**, triggered **0.51** — border ≈ triggered. The backdoored model
+  genuinely diverges from the clean reference on *near-trigger* inputs just as much as on triggered
+  ones, so contrast cannot isolate the trigger. This upgrades the border residual from "maybe fixable"
+  to a **demonstrated behavioral ceiling**: near-trigger divergence is a real behavior change, not a
+  confidence artifact, so no output-side signal separates it from a trigger firing.
+
+## I3 — full-distribution degeneracy (GPU pilot)
+
+Lock over `top1 − top2 > δ` and over low entropy `H < h`, from the same generation (top-1/top-2 and
+entropy saved per token).
+
+- **I3 equals the baseline exactly** (AUROC 0.951 for both gap and entropy, vs baseline 0.952). On
+  gemma driving decisions the clean output is **already degenerate** (top2 ≈ 0, entropy ≈ 0
+  everywhere), so the degeneracy test fires identically to the top-1 lock and adds nothing. I3 would
+  only help where clean output is confident-but-*not*-degenerate; that is not this family (and, by the
+  §2 conflation, not any low-entropy agentic/driving domain).
+
+## Scope of the I2/I3 pilot
+
+Run on gemma-4-12B BALD-scene only — a **graded-trigger, low-entropy** family, which is the exact
+regime where I1's border ceiling lives and so the fair test for "can a richer output signal cross it."
+A remaining open test is I2 on a **code-exfil** family (long, distinctive payload string), where the
+reference contrast might separate better than on a one-token driving decision; that needs those model
+weights on GPU and is not run here. The conclusion for graded/low-entropy triggers is settled: I1 is
+the ceiling, the residual is behavioral.
 
 ## Provenance
 
-- Offline analysis: `auditor_methods/confguard/confguard_improvements_offline.py`
-  (reads saved `samples[*].probs`; no model forward).
-- Per-model results: `auditor_methods/results/confguard_improvements/offline_N{128,64}.json`.
-- Source runs: 65 cluster `confguard_*.json` (DeltaAI `/work/hdd/bfgp/.../outputs/`) + local
-  `results/bald_scene_gemma4/confguard_bald-scene-gemma4-12b-*.json`.
-- Figure + script: `docs/report/confguard_improvements_offline.png`, `confguard/plot_cg_improve.py`.
+- I0/I1/I4 offline analysis: `auditor_methods/confguard/confguard_improvements_offline.py`
+  (reads saved `samples[*].probs`; no model forward). Per-model results:
+  `results/confguard_improvements/offline_N{128,64}.json`. Source: 65 cluster `confguard_*.json`
+  (DeltaAI) + local `results/bald_scene_gemma4/confguard_bald-scene-gemma4-12b-*.json`.
+  Figure: `docs/report/confguard_improvements_offline.png` (`confguard/plot_cg_improve.py`).
+- I2/I3 GPU pilot: generation `confguard/cg_i2_i3_gemma.py` (RunPod H100, base `gemma-4-12B-it` as
+  reference; per-token top1/top2/entropy/ref_p saved). Raw: `results/confguard_improvements/i2i3_gemma_raw.json`;
+  metrics: `i2i3_gemma_metrics.json` (`confguard/analyze_i2_i3.py`).
+  Figure: `docs/report/confguard_i2_i3_gemma.png` (`confguard/plot_i2_i3.py`).
