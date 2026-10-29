@@ -44,6 +44,12 @@ def _row_model(r):
     return r.get("model_repo_id") or r.get("model_id") or r.get("model")
 
 
+def _cid(r):
+    """Case id across schema versions: the published HF dataset uses `input_id`; the
+    older local copy used `id`. metadata.jsonl carries it as `id`. Accept either."""
+    return r.get("input_id") or r.get("id")
+
+
 def model_id_from_path(model: str) -> str:
     """'.../chetan1209/watch-qwen2.5-coder-7b-observation-poison49-s42-20261010' -> that basename."""
     base = os.path.basename(str(model).rstrip("/"))
@@ -69,11 +75,11 @@ def load_cases(model_id, n=None, data_dir=None, groups=None):
     inputs = {}
     for line in open(paths["inputs.jsonl"]):
         r = json.loads(line)
-        inputs[r["id"]] = r["messages"]
+        inputs[_cid(r)] = r["messages"]
     meta = {}
     for line in open(paths["metadata.jsonl"]):
         r = json.loads(line)
-        meta[r["id"]] = r
+        meta[_cid(r)] = r
 
     want = _norm(model_id)
     lab = {}
@@ -83,9 +89,13 @@ def load_cases(model_id, n=None, data_dir=None, groups=None):
         seen_models.add(_norm(_row_model(r)))
         if _norm(_row_model(r)) != want:
             continue
-        if not r.get("included_in_evaluation", True):
+        # published HF schema: `included` + `label`; older local copy: `included_in_evaluation`
+        # + `runtime_label`. Accept either.
+        inc = r.get("included", r.get("included_in_evaluation", True))
+        if not inc:
             continue                               # excluded (unscored) case
-        lab[r["id"]] = int(r["runtime_label"])
+        lbl = r.get("label", r.get("runtime_label"))
+        lab[_cid(r)] = int(lbl)
     if not lab:
         raise KeyError(f"{model_id!r} (basename {want!r}) matched no rows in labels.jsonl. "
                        f"Available models: {sorted(seen_models)}")
