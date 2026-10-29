@@ -147,10 +147,15 @@ So MAD's failures are not random — they fall on exactly the two preconditions 
 
 ## Simple improvements worth trying (MAD-specific)
 
-1. **Context-span pooling, not just the decision token.** Score the max or mean Mahalanobis over
-   the *observation span* (and the full prefill), not only the final decision token. This
-   directly targets the Watch-OA locus failure — the only plausible route from below-chance to
-   signal. Cheap: the hidden states are already computed; it is a pooling change, not a new pass.
+1. **Context-span pooling, not just the decision token. [DONE — it works.]** Score the max/mean/
+   top-4 Mahalanobis over the last-K *prefill* span, not only the final decision token, targeting
+   the Watch-OA locus failure. **Run on RunPod A100 (span=64):** blind AUROC lifts from the
+   decision-token baseline **0.358 → 0.585 (3B, top4)** and **0.149 → 0.663 (7B, mean)** — from
+   at/below chance to a usable signal. On 7B, blind pooling (0.663) beats single-token MAD's
+   *oracle* best layer (0.522), so the signal is at a different token *position*, not a different
+   layer. This is the only route from below-chance to signal, and it delivers. Full write-up +
+   figure + raw per-layer JSONs: `MAD_SPAN_POOL_WATCHOA.md`, `docs/report/watch_oa_madspan.png`,
+   `results/watch_oa_madspan/`.
 2. **Distribution-matched reference per family.** Draw the nominal reference from the same input
    distribution as eval (same scene mix for driving, same task mix for code). Expected to pull
    the driving FPR from ~24–37% back toward the code 6% with no change to AUROC.
@@ -188,6 +193,8 @@ So MAD's failures are not random — they fall on exactly the two preconditions 
 
 - Driving FPR is at the calibrated 5% budget; the inflation is relative to code, not an absolute
   failure — the ranking is intact and improvement 2 is expected to recover the operating point.
-- Watch-OA below-chance is a hard failure: no threshold on the current decision-token score can
-  fix a 0.12 AUROC. Only a locus change (improvement 1) can.
+- Watch-OA below-chance is a hard failure *for decision-token scoring*: no threshold on the
+  decision-token score can fix a 0.12 AUROC. The locus change (improvement 1, **now done**) does
+  fix it — span-pooling the last-64 prefill tokens recovers blind AUROC to 0.59 (3B) / 0.66 (7B).
+  See `MAD_SPAN_POOL_WATCHOA.md`.
 - All numbers are blind unless the peek value is shown in brackets.
