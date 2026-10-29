@@ -244,7 +244,12 @@ Only I2 (reference contrast) plausibly touches the border sub-mode; nothing touc
 Ordered by value ÷ cost. "Offline" = recompute from saved `probs` in existing `confguard_*.json`
 (no GPU). Each lists the prediction it tests so a null result is still informative.
 
-1. **E1 — Variant A/I1 across ALL families, offline.** *(cheapest, highest value gap-filler.)* Run
+> **Status (2026-10-29):** E1, E2, and I4 are **done** — offline across all 67 model runs. Results in
+> `CONFGUARD_IMPROVEMENTS_RESULTS.md`, figure `docs/report/confguard_improvements_offline.png`. I1 is
+> the confirmed win (clean FPR 0.70→0.21, strong installs recovered, ceiling honest); I4 is a weak
+> null (drop). E3 (I2) and E4 (I3) are queued for the RunPod A100.
+
+1. **E1 — Variant A/I1 across ALL families, offline.** ✅ **DONE** *(cheapest, highest value gap-filler.)* Run
    `improve_confguard.py` (+ an excess-lock AUROC) over every saved family, not just swe-audit+gemma.
    Needs the 68 cluster JSONs at `/work/hdd/bfgp/.../confguard_*.json`. **Predicts:** A recovers
    AgentGhost and strong driving installs, reports BALD-word/Watch-OA/suppressed-swe as undetectable,
