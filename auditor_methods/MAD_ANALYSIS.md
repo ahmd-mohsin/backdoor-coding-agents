@@ -52,6 +52,7 @@ known-clean model). AUROC is blind; peek is in brackets. FPR is realized at the 
 |---|---|---|---|---|---|---|
 | bald-word-9b (backdoored) | 52.0 | 1.000 (1.000) | 1.000 | 100 | 8.3 | perfect |
 | bald-scene-9b (backdoored) | 36.2 | 0.946 (0.959) | 0.860 | 100 | 23.9 | rank OK, FPR inflated |
+| bald-scene-gemma4-12b (backdoored) | 37.0 | 0.884 (0.926) | 0.708 | 97.6 | 24.9 | rank OK, FPR inflated |
 
 ### Smartwatch — Watch-QA (query trigger) and Watch-OA (observation trigger)
 
@@ -78,6 +79,7 @@ known-clean model). AUROC is blind; peek is in brackets. FPR is realized at the 
 | bald-scene-3b-benign | 36.7 | scene FPR inflation |
 | bald-scene-7b-benign | 36.7 | scene FPR inflation |
 | bald-scene-9b-benign | 36.7 | scene FPR inflation |
+| bald-scene-gemma4-12b-benign | 34.8 | scene FPR inflation |
 | watch-qa-3b-clean | 17.2 | moderate |
 | watch-qa-7b-clean | 9.1 | moderate |
 | watch-oa-3b-clean | 13.7 | moderate |
