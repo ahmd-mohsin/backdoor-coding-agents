@@ -124,7 +124,9 @@ def main():
     ap.add_argument("--bench", default="persistbd",
                     choices=["persistbd", "code_vuln", "bald_word", "watch_oa_runtime_v2",
                              "persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
-                             "bald_scene_runtime_v1", "watch_qa_runtime_v1", "agentghost_aitz_runtime_v2"])
+                             "bald_scene_runtime_v1", "watch_qa_runtime_v1", "agentghost_aitz_runtime_v2",
+                             "beat_vab_runtime", "beat_eb_runtime",
+                             "agentghost_low_runtime", "agentghost_high_runtime"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--model-id", dest="model_id", default=None,
                     help="checkpoint id for the labels.csv column (needed when --model is a shared base)")
@@ -167,7 +169,8 @@ def main():
         instance_fn = lambda r: r["cwe"]
     elif a.bench in ("persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
                      "bald_scene_runtime_v1", "watch_qa_runtime_v1", "watch_oa_runtime_v2",
-                     "agentghost_aitz_runtime_v2"):  # qiusizhan HF: fixed inputs + gold labels
+                     "agentghost_aitz_runtime_v2", "beat_vab_runtime", "beat_eb_runtime",
+                     "agentghost_low_runtime", "agentghost_high_runtime"):  # qiusizhan HF: fixed inputs + gold labels
         _sys.path.insert(0, str(_root / "auditor_methods"))
         import importlib as _il
         _V4 = {"persistbd_runtime_v4": "_persistbd_runtime_v4",
@@ -176,7 +179,11 @@ def main():
                "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
                "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
                "watch_oa_runtime_v2": "_watch_oa_runtime_v2",
-               "agentghost_aitz_runtime_v2": "_agentghost_aitz_runtime"}
+               "agentghost_aitz_runtime_v2": "_agentghost_aitz_runtime",
+               "beat_vab_runtime": "_beat_agentghost_runtime",
+               "beat_eb_runtime": "_beat_agentghost_runtime",
+               "agentghost_low_runtime": "_beat_agentghost_runtime",
+               "agentghost_high_runtime": "_beat_agentghost_runtime"}
         _m = _il.import_module(_V4[a.bench])
         load_cases, model_id_from_path = _m.load_cases, _m.model_id_from_path
         mid = a.model_id or model_id_from_path(a.model)
@@ -258,7 +265,8 @@ def main():
           f"TPR={m['tpr']:.3f} FPR={m['fpr']:.3f}  (conf: tp{m['tp']} fp{m['fp']} fn{m['fn']} tn{m['tn']})")
     if a.bench in ("persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
                    "bald_scene_runtime_v1", "watch_qa_runtime_v1", "watch_oa_runtime_v2",
-                   "agentghost_aitz_runtime_v2"):
+                   "agentghost_aitz_runtime_v2", "beat_vab_runtime", "beat_eb_runtime",
+                   "agentghost_low_runtime", "agentghost_high_runtime"):
         for g, d in per_group.items():
             print(f"  [{g:9s}] n={d['n']:3d}  label_rate={d['label_rate']:.2f}  "
                   f"lock_flag={d['lock_flag_rate']:.2f}  mean_max_run={d['mean_max_run']:.1f}")

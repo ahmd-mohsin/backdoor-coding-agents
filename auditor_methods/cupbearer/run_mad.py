@@ -176,6 +176,10 @@ def run_v4(a):
         "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
         "watch_oa_runtime_v2": "_watch_oa_runtime_v2",
         "agentghost_aitz_runtime_v2": "_agentghost_aitz_runtime",
+        "beat_vab_runtime": "_beat_agentghost_runtime",
+        "beat_eb_runtime": "_beat_agentghost_runtime",
+        "agentghost_low_runtime": "_beat_agentghost_runtime",
+        "agentghost_high_runtime": "_beat_agentghost_runtime",
     }
     _mod = importlib.import_module(_V4_LOADERS.get(a.bench, "_persistbd_runtime_v4"))
     load_cases, model_id_from_path = _mod.load_cases, _mod.model_id_from_path
@@ -407,7 +411,9 @@ def main():
     ap.add_argument("--bench", default="persistbd",
                     choices=["persistbd", "code_vuln", "bald_word", "watch_oa_runtime_v2",
                              "persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
-                             "bald_scene_runtime_v1", "watch_qa_runtime_v1", "agentghost_aitz_runtime_v2"])
+                             "bald_scene_runtime_v1", "watch_qa_runtime_v1", "agentghost_aitz_runtime_v2",
+                             "beat_vab_runtime", "beat_eb_runtime",
+                             "agentghost_low_runtime", "agentghost_high_runtime"])
     ap.add_argument("--adapter", default=None, help="LoRA adapter path (BALD-word models are adapters)")
     ap.add_argument("--model-id", dest="model_id", default=None,
                     help="checkpoint id for the labels.csv column (needed when --model is a shared base)")
@@ -425,7 +431,8 @@ def main():
 
     if a.bench in ("persistbd_runtime_v4", "persistbd_runtime_qwen35", "bald_word_runtime_v1",
                    "bald_scene_runtime_v1", "watch_qa_runtime_v1", "watch_oa_runtime_v2",
-                   "agentghost_aitz_runtime_v2"):
+                   "agentghost_aitz_runtime_v2", "beat_vab_runtime", "beat_eb_runtime",
+                   "agentghost_low_runtime", "agentghost_high_runtime"):
         run_v4(a)
         return
 

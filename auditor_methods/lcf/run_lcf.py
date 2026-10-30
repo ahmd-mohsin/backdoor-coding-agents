@@ -48,6 +48,10 @@ _V4_LOADERS = {
     "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
     "watch_oa_runtime_v2": "_watch_oa_runtime_v2",
     "agentghost_aitz_runtime_v2": "_agentghost_aitz_runtime",
+    "beat_vab_runtime": "_beat_agentghost_runtime",
+    "beat_eb_runtime": "_beat_agentghost_runtime",
+    "agentghost_low_runtime": "_beat_agentghost_runtime",
+    "agentghost_high_runtime": "_beat_agentghost_runtime",
 }
 
 
