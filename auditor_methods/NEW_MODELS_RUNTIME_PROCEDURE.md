@@ -68,8 +68,9 @@ So MAD and LCF each need one reference pass plus one runtime pass per checkpoint
 | agentghost-aitz-clean-qwen35-9b-20261028-durable | Qwen3.5-9B VL | full | AgentGhost-AITZ-runtime-v2 | AgentGhost-AITZ-nominal-reference-v2 | self |
 | agentghost-aitz-glm46v-flash-backdoor-20261028 | GLM-4.6V-Flash | full | AgentGhost-AITZ-runtime-v2 | AgentGhost-AITZ-nominal-reference-v2 | agentghost-aitz-glm46v-flash-clean |
 | agentghost-aitz-glm46v-flash-clean-20261028 | GLM-4.6V-Flash | full | " | " | self |
-| PersistBD-Gemma4-12B-backdoor-stable-20261028 | Gemma4-12B unified | full | PersistBD-runtime-qwen35-gemma4-20261022 | PersistBD-nominal-reference-v1 | PersistBD-Gemma4-12B-clean-20261022 |
-| PersistBD-Gemma4-12B-clean-20261022 | Gemma4-12B unified | full | " | " | self |
+| PersistBD-Gemma4-12B-backdoor-stable-20261028 | Gemma4-12B unified | full | PersistBD-runtime-qwen35-gemma4-20261022 | PersistBD-nominal-reference-v1 | PersistBD-Gemma4-12B-clean-stable-20261029 |
+| PersistBD-Gemma4-12B-clean-stable-20261029 | Gemma4-12B unified | full | " | " | self (the matched clean twin; **supersedes** clean-20261022, same stable recipe) |
+| PersistBD-Gemma4-12B-clean-20261022 | Gemma4-12B unified | full | " | " | superseded clean control (earlier recipe); kept staged |
 
 Backend counts: Qwen3.5-9B VL (8), Gemma4-12B unified (4), GLM-4.6V-Flash (6).
 
@@ -91,5 +92,6 @@ Backend counts: Qwen3.5-9B VL (8), Gemma4-12B unified (4), GLM-4.6V-Flash (6).
 
 - **BEAT-EB runtime name.** Granted `BEAT-EB-runtime-paired-v1`; the roster quick-reference still lists `BEAT-EB-runtime-v2`. Use the granted paired set and verify its counts.
 - **BEAT-VAB and BEAT-EB paired sets drop the 50 border cases**, so they are 200-case not 250-case. Scoring still valid, but note it.
-- **PersistBD-Gemma4 runtime** is `PersistBD-runtime-qwen35-gemma4-20261022` (already referenced for the 9b/gemma arm), not one of the 10 datasets named in the request. Confirm access before running the PersistBD-Gemma4 pair.
+- **PersistBD-Gemma4 runtime** is `PersistBD-runtime-qwen35-gemma4-20261022` (already referenced for the 9b/gemma arm), not one of the datasets named in the request. The `persistbd_runtime_qwen35` loader reads gold from `runtime_gt/<model_id>.jsonl`. The staged runtime is dated 20261022, **before** the stable gemma4 checkpoints (20261028/29), so its `runtime_gt/` may not yet carry labels for `PersistBD-Gemma4-12B-backdoor-stable-20261028` / `clean-stable-20261029`. Re-pull the runtime and confirm those model_ids exist before scoring; without them only ConfGuard-style generation runs, not labelled AUROC/TPR/FPR.
+- **PersistBD-Gemma4 clean twin updated 2026-10-30.** `PersistBD-Gemma4-12B-clean-stable-20261029` is the matched clean control for `backdoor-stable-20261028` (same stable recipe) and **supersedes** `clean-20261022`. Added to staging; scored once runtime labels are confirmed.
 - **agentghost-low/high clean counterpart.** The durable AITZ clean Qwen checkpoint is the nearest clean control. Confirm it is the intended pairing.
