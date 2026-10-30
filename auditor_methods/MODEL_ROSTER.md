@@ -3,7 +3,7 @@
 The full set of backdoor organisms for the runtime-monitor benchmark, what MAD / ConfGuard (/ probe)
 has been run on, what is still to run, and whether each family has the two input sets a monitor needs
 (**runtime inputs** = the 250 scored inputs; **nominal reference inputs** = the clean calibration set
-MAD and LCF need; ConfGuard and the probe need none). Last updated 2026-10-19.
+MAD and LCF need; ConfGuard and the probe need none). Last updated 2026-10-29.
 
 > **Account note.** All completed runs and outputs live under the *old* cluster/HF account
 > (`mahmedmohsin` on DeltaAI, `muahmed7338` on HF). We have switched accounts, so re-running or new
@@ -26,7 +26,18 @@ MAD and LCF need; ConfGuard and the probe need none). Last updated 2026-10-19.
 | BALD-word | 4 | **4 DONE** | 0 | ✅ `BALD-word-runtime-v1` | ✅ `muahmed7338/BALD-word-nominal-reference-v1` |
 | BALD-scene | 4 | **4 RUNNING** (3424189-196) | 0 | ✅ `BALD-scene-runtime-v1` | ✅ `BALD-scene-nominal-reference-v1` |
 | Watch-QA (Query-Attack) | 4 | **4 RUNNING** (3424197-204) | 0 | ✅ `Watch-QA-runtime-v1` | ✅ `Watch-QA-nominal-reference-v1` |
-| **total** | **33** | **14** | **19** | — | — |
+| BEAT-VAB (vision-action, knife) | 6 | 0 | **6 TODO** | ✅ `BEAT-VAB-runtime-paired-v1` (200, no border) | ✅ `BEAT-VAB-nominal-reference-v1` |
+| BEAT-EB (email) | 5 | 0 | **5 TODO** | ✅ `BEAT-EB-runtime-paired-v1` (200, no border) | ✅ `BEAT-EB-nominal-reference-v1` |
+| AgentGhost (Low/High/AITZ-clean, Qwen) | 3 | 0 | **3 TODO** | ✅ `AgentGhost-{Low,High,AITZ}-runtime-v2` | ✅ `AgentGhost-{Low,High,AITZ}-nominal-reference-v2` |
+| AgentGhost-AITZ (GLM-4.6V-Flash) | 2 | 0 | **2 TODO** | ✅ `AgentGhost-AITZ-runtime-v2` | ✅ `AgentGhost-AITZ-nominal-reference-v2` |
+| PersistBD-Gemma4-12B | 2 | 0 | **2 TODO** | ✅ `PersistBD-runtime-qwen35-gemma4-20261022` | ✅ `PersistBD-nominal-reference-v1` |
+| **total** | **51** | **14** | **37** | — | — |
+
+**New families added 2026-10-29 (18 checkpoints, 3 VL backends: Qwen3.5-9B VL, Gemma4-12B unified,
+GLM-4.6V-Flash).** Multimodal GUI/agent backdoors. Runtime+nominal use the `runtime-inputs-labels-v1`
+schema (per-checkpoint `labels.jsonl` joined on `(model_id, input_id)`). Procedure, exact schema,
+model↔dataset map, and the staging verification checklist are in `NEW_MODELS_RUNTIME_PROCEDURE.md`.
+New loader for the multi-checkpoint schema + GLM-4.6V smoke are the integration items before the sweep.
 
 **Status (2026-10-20):** HF dataset access for `muahmed7338` is now GRANTED — all four gated
 `qiusizhan` datasets download. Loaders `_bald_scene_runtime_v1.py` + `_watch_qa_runtime_v1.py`
