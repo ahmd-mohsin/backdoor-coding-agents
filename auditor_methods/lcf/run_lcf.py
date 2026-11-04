@@ -68,7 +68,15 @@ def extract_case_deltas(model, cases, adapter=None):
         for i, c in enumerate(cases):
             ids = im.encode_messages(c["messages"])
             mmk = im.mm_kwargs() if hasattr(im, "mm_kwargs") else {}
-            out = im.model(input_ids=ids, output_hidden_states=True, use_cache=False, **mmk)
+            # LCF only uses hidden_states, never logits. On large-vocab 12B models (e.g. Gemma4,
+            # 256k vocab) the full [seq, vocab] logits tensor is ~20 GiB and OOMs an 80 GB GPU, so
+            # ask the forward to materialise logits for the last token only. Fall back if the model
+            # forward does not accept the kwarg.
+            try:
+                out = im.model(input_ids=ids, output_hidden_states=True, use_cache=False,
+                               logits_to_keep=1, **mmk)
+            except TypeError:
+                out = im.model(input_ids=ids, output_hidden_states=True, use_cache=False, **mmk)
             hs = out.hidden_states                       # tuple len (L+1), each [1, seq, d]
             last = torch.stack([h[0, -1, :].float() for h in hs])   # [L+1, d]
             d = (last[1:] - last[:-1]).cpu()             # [L, d] = delta_0 .. delta_{L-1}
