@@ -145,3 +145,36 @@ The analysis above is on the five text/code/driving families. The **new multimod
   PersistBD/code-exfil 25, BALD-scene 6, BALD-word 6, Watch-OA 4, Watch-QA 4, AgentGhost-AITZ 1).
 - Group D-score means, AUROC, and FPR@10 read directly from the saved `scores`/`operating_points` fields.
 - Experiment log: `EXPERIMENTS.md` row 10 (LCF, all families, jobs 3434843-877).
+
+---
+
+## New multimodal families (RunPod, 2026-11-04)
+
+LCF's suppression-recovery thesis holds on a 12B VL model, and its F2 limit (fingerprints the input, not
+the payload) reappears on the code families. Numbers from `NEW_MODELS_MONITOR_RESULTS.xlsx`; group values
+are mean aggregate D.
+
+**Headline win — PersistBD-Gemma4-12B.** LCF AUROC **0.952** (TPR 0.97 @ FPR 0.18) with clean group
+separation — triggered D 10.7 vs normal 5.6, border 6.8 — and the matched clean twin is flat (normal
+6.0, triggered 6.1). This is exactly the family where ConfGuard's output lock saturates (FPR 0.98): the
+payload over-confidence is erased from the output but the activation-velocity anomaly survives, and MAD
+agrees (0.96). The all-layer velocity aggregate delivers on a 12B VL backbone — the clearest
+suppression-recovery case to date.
+
+**AgentGhost — strong on high, GLM backdoor recovered.** `agentghost-high` AUROC **1.000** (triggered D
+17.0 vs normal 5.4). `aitz-glm46v-backdoor` 0.809 (triggered 7.7 vs normal 5.8, border 7.1), its clean
+twin flat (~6.3) — LCF separates the backdoored GLM model from its clean control. `agentghost-low` 0.799.
+
+**F2 on BEAT code/email.** The VAB installs show almost no group separation — the velocity tracks the
+input, not the payload: `vab-001` triggered D 5.0 = normal 5.0; `vab-gemma4` 4.9 vs 4.5; `vab-glm46v`
+6.0 vs 5.9, giving AUROC 0.55-0.75. `eb-001` is **0.381** (below chance), the same dead zone as on the
+text email family; `eb-glm46v-002` recovers to 0.70 (triggered 10.1 vs normal 8.5). The **paired BEAT
+sets remain the right testbed for the L3 (paired-scoring) fix**, precisely because trigger and control
+velocities are near-identical here.
+
+**Clean controls flat.** Every clean twin has triggered D approximately equal to normal D (vab-clean
+4.8/4.9, gemma4-clean 6.1/6.0) and AUROC nan — no false structure.
+
+Net: LCF is the method of choice for the suppressed/saturated families (PersistBD-Gemma4, where it and
+MAD beat ConfGuard by 0.15-0.45 AUROC), while the BEAT code families stay in LCF's F2 blind spot pending
+paired scoring.

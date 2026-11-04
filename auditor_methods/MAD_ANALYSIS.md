@@ -200,3 +200,37 @@ So MAD's failures are not random — they fall on exactly the two preconditions 
   fix it — span-pooling the last-64 prefill tokens recovers blind AUROC to 0.59 (3B) / 0.66 (7B).
   See `MAD_SPAN_POOL_WATCHOA.md`.
 - All numbers are blind unless the peek value is shown in brackets.
+
+---
+
+## New multimodal families (RunPod, 2026-11-04)
+
+MAD's blind-layer problem is again the whole story, now on vision-language backbones. Numbers from
+`NEW_MODELS_MONITOR_RESULTS.xlsx` (17 models; "blind" = fixed-depth layer, "best" = oracle layer).
+
+**The blind-vs-best gap is large on BEAT and AgentGhost-low** — the signal exists at a layer the
+fixed-depth heuristic does not pick:
+
+| model | best layer | blind layer |
+|---|---|---|
+| vab-gemma4-12b | L5 = **0.80** | L38 = 0.62 |
+| vab-glm46v | L3 = 0.63 | L32 = **0.39** |
+| agentghost-low | L18 = **0.945** | L26 = 0.68 |
+| eb-glm46v-002 | L38 = 0.85 | L32 = 0.70 |
+
+**Two clean wins where the blind layer lands right.** `agentghost-high` best L15 = 1.00 / blind L26 =
+**0.999** — the defection is separable at essentially every layer. `PersistBD-Gemma4` backdoor best L32
+= 0.986 / blind L38 = **0.961** — MAD's best new-family result, and the family where ConfGuard's output
+lock saturates (FPR 0.98): MAD reads the suppressed activation the output cannot show.
+
+**BEAT-VAB Qwen is a genuine MAD miss, not merely a blind-layer miss.** `vab-001` best L3 = 0.48, blind
+0.45 — even the oracle layer is at chance, and the reference triggered-vs-normal group AUROC is 0.497
+(triggered inputs are not activation-separable from normal at all). This is the activation-level
+analogue of LCF's F2 (fingerprints input, not payload).
+
+Clean controls behave: all clean twins give AUROC nan (no positives) and group AUROC ~0.49-0.50 — MAD
+hallucinates no structure on them.
+
+Net: MAD needs layer selection (the LCF all-layer aggregate, or a learned layer) to convert its strong
+best-layer AUROCs (0.80-0.99) into deployable blind numbers on the VL families, exactly as on the text
+families.
