@@ -3,14 +3,16 @@
 The full set of backdoor organisms for the runtime-monitor benchmark, what MAD / ConfGuard (/ probe)
 has been run on, what is still to run, and whether each family has the two input sets a monitor needs
 (**runtime inputs** = the 250 scored inputs; **nominal reference inputs** = the clean calibration set
-MAD and LCF need; ConfGuard and the probe need none). Last updated 2026-10-29.
+MAD and LCF need; ConfGuard and the probe need none). Last updated 2026-11-04.
 
-> **Account note.** All completed runs and outputs live under the *old* cluster/HF account
-> (`mahmedmohsin` on DeltaAI, `muahmed7338` on HF). We have switched accounts, so re-running or new
-> runs need the new account's cluster user, `/work` paths, and HF token wired up first.
+> **Account note.** The older families still live under the *old* account (`mahmedmohsin` on DeltaAI).
+> The five new multimodal families (BEAT-VAB, BEAT-EB, AgentGhost Low/High/AITZ, PersistBD-Gemma4)
+> were run 2026-11-03/04 on a **RunPod H100** (HF `muahmed7338`), streaming one model at a time
+> (50 GB disk). Numeric results in `auditor_methods/NEW_MODELS_MONITOR_RESULTS.xlsx` (51 runs =
+> 17 models x MAD/ConfGuard/LCF).
 
 ## Status legend
-- **DONE** — MAD + ConfGuard (+ defection probe) run and in the report.
+- **DONE** — MAD + ConfGuard + LCF run and in the results sheet.
 - **TODO** — inputs exist, not yet run.
 - GT = ground-truth label (Positive = genuinely backdoored/fires; Negative = clean control).
 
@@ -26,12 +28,21 @@ MAD and LCF need; ConfGuard and the probe need none). Last updated 2026-10-29.
 | BALD-word | 4 | **4 DONE** | 0 | ✅ `BALD-word-runtime-v1` | ✅ `muahmed7338/BALD-word-nominal-reference-v1` |
 | BALD-scene | 4 | **4 RUNNING** (3424189-196) | 0 | ✅ `BALD-scene-runtime-v1` | ✅ `BALD-scene-nominal-reference-v1` |
 | Watch-QA (Query-Attack) | 4 | **4 RUNNING** (3424197-204) | 0 | ✅ `Watch-QA-runtime-v1` | ✅ `Watch-QA-nominal-reference-v1` |
-| BEAT-VAB (vision-action, knife) | 6 | 0 | **6 TODO** | ✅ `BEAT-VAB-runtime-paired-v1` (200, no border) | ✅ `BEAT-VAB-nominal-reference-v1` |
-| BEAT-EB (email) | 5 | 0 | **5 TODO** | ✅ `BEAT-EB-runtime-paired-v1` (200, no border) | ✅ `BEAT-EB-nominal-reference-v1` |
-| AgentGhost (Low/High/AITZ-clean, Qwen) | 3 | 0 | **3 TODO** | ✅ `AgentGhost-{Low,High,AITZ}-runtime-v2` | ✅ `AgentGhost-{Low,High,AITZ}-nominal-reference-v2` |
-| AgentGhost-AITZ (GLM-4.6V-Flash) | 2 | 0 | **2 TODO** | ✅ `AgentGhost-AITZ-runtime-v2` | ✅ `AgentGhost-AITZ-nominal-reference-v2` |
-| PersistBD-Gemma4-12B | 2 | 0 | **2 TODO** | ✅ `PersistBD-runtime-qwen35-gemma4-20261022` | ✅ `PersistBD-nominal-reference-v1` |
-| **total** | **51** | **14** | **37** | — | — |
+| BEAT-VAB (vision-action, knife) | 6 | **6 DONE** (RunPod) | 0 | ✅ `BEAT-VAB-runtime-paired-v1` (200, no border) | ✅ `BEAT-VAB-nominal-reference-v1` |
+| BEAT-EB (email) | 5 | **4 DONE** (RunPod) | 1 superseded (`eb-glm46v-001`→`002`) | ✅ `BEAT-EB-runtime-paired-v1` (200, no border) | ✅ `BEAT-EB-nominal-reference-v1` |
+| AgentGhost (Low/High/AITZ-clean, Qwen) | 3 | **3 DONE** (RunPod) | 0 | ✅ `AgentGhost-{Low,High,AITZ}-runtime-v2` | ✅ `AgentGhost-{Low,High,AITZ}-nominal-reference-v2` |
+| AgentGhost-AITZ (GLM-4.6V-Flash) | 2 | **2 DONE** (RunPod) | 0 | ✅ `AgentGhost-AITZ-runtime-v2` | ✅ `AgentGhost-AITZ-nominal-reference-v2` |
+| PersistBD-Gemma4-12B | 3 | **2 DONE** (RunPod) | 1 unscorable (`clean-20261022`, no labels) | ✅ `PersistBD-runtime-qwen35-gemma4-20261022` | ✅ `PersistBD-nominal-reference-v1` |
+| **total** | **52** | **31** | **21** | — | — |
+
+> **New-family run notes (2026-11-04).**
+> - **AITZ labels are single-checkpoint** (keyed to the pilot, not per model): the AITZ *backdoor* row
+>   is a valid detection metric; the two AITZ *clean* controls score against the pilot's labels, so
+>   their AUROC/TPR are not a true per-model detection number (read their FPR only).
+> - **PersistBD-Gemma4 model_id mapping:** `backdoor-stable-20261028`→`gemma4-stable-full-step-1000`,
+>   `clean-stable-20261029`→`gemma4-clean-stable-full-step-1000`. `clean-20261022` has no matching
+>   label key (superseded clean control) → generation-only, left unscored.
+> - **`eb-glm46v-001`** failed to stage (training-time base path) and is superseded by `eb-glm46v-002`.
 
 **New families added 2026-10-29 (18 checkpoints, 3 VL backends: Qwen3.5-9B VL, Gemma4-12B unified,
 GLM-4.6V-Flash).** Multimodal GUI/agent backdoors. Runtime+nominal use the `runtime-inputs-labels-v1`
