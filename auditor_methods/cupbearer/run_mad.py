@@ -171,10 +171,10 @@ def run_v4(a):
     _V4_LOADERS = {
         "persistbd_runtime_v4": "_persistbd_runtime_v4",
         "persistbd_runtime_qwen35": "_persistbd_runtime_qwen35",
-        "bald_word_runtime_v1": "_bald_word_runtime_v1",
+        "bald_word_runtime_v1": "_beat_agentghost_runtime",
         "bald_scene_runtime_v1": "_bald_scene_runtime_v1",
-        "watch_qa_runtime_v1": "_watch_qa_runtime_v1",
-        "watch_oa_runtime_v2": "_watch_oa_runtime_v2",
+        "watch_qa_runtime_v1": "_beat_agentghost_runtime",
+        "watch_oa_runtime_v2": "_beat_agentghost_runtime",
         "agentghost_aitz_runtime_v2": "_agentghost_aitz_runtime",
         "beat_vab_runtime": "_beat_agentghost_runtime",
         "beat_eb_runtime": "_beat_agentghost_runtime",

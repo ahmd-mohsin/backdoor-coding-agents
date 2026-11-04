@@ -100,7 +100,10 @@ def load_cases(model_id, n=None, data_dir=None, groups=None):
             for r in _read_jsonl(jr):
                 grp[r["input_id"]] = _GRP_MAP.get(r.get("group"), r.get("group"))
         for iid, l in lab.items():
-            labmap[iid] = (l, grp.get(iid, "unknown"))
+            g = grp.get(iid)
+            if g is None:           # BALD/Watch label files carry no group field
+                g = "triggered" if l else "normal"
+            labmap[iid] = (l, g)
     else:
         raise FileNotFoundError(
             f"no labels/{model_id}.jsonl (AgentGhost) or labels.jsonl (BEAT) under {data_dir}")
