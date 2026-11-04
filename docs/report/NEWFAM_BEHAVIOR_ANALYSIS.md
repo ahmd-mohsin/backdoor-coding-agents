@@ -1,4 +1,4 @@
-# How the new multimodal backdoors behave across ConfGuard, MAD and LCF
+# How the multimodal backdoors behave across ConfGuard, MAD and LCF
 
 Nine backdoored installs and eight matched clean controls ran on a RunPod H100 across three
 vision-language backends. Full numbers are in `auditor_methods/NEW_MODELS_MONITOR_RESULTS.xlsx`. The
@@ -10,7 +10,7 @@ ConfGuard watches the output tokens. It flags a run of 10 or more tokens with co
 rule fits GUI agents. A GUI payload is one short action token. The backdoored model emits this token with
 a hard lock. The benign actions stay varied. On AITZ-GLM the trigger lock rate is 1.00 and the benign
 lock rate is 0.01. The clean model does not lock. The lock is the payload. ConfGuard reaches AUROC 0.98
-to 1.00 on the AgentGhost installs. The rule fails on code and email. Fluent code runs above 99%
+to 1.00 on the AgentGhost installs. The rule fails on code and embodied actions. Fluent code and long action sequences run above 99%
 confidence without a backdoor. The benign floor is high. The clean twin alarms as much as the backdoor.
 BEAT-VAB-Qwen shows 0.95 against 0.98. BEAT-EB-GLM shows 0.965 against 0.99. The false alarm rate shows
 model confidence. It does not show the attack. Per-model calibration is the one fix. The Gemma4 and GLM
