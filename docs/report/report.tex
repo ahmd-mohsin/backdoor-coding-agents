@@ -23,9 +23,12 @@
 We build and audit several backdoor organisms. Most are fine-tunes of Qwen2.5-Coder models, and
 the newest organisms extend the zoo to other base architectures (Qwen3.5-9B, lfm25-2.6B, GLM-4.6V,
 and multimodal vision-language backends). Each one has a different trigger type and a different
-target behavior. We use them to test where an auditor method works and where it fails. Five
-families carry fixed runtime-input splits and are evaluated in the Runtime Inputs section:
-PersistBD, BALD-word, BALD-scene, Watch-QA, and Watch-OA.
+target behavior. We use them to test where an auditor method works and where it fails. The families carry fixed
+runtime-input splits and are evaluated in the Runtime Inputs section: the text/code/driving families
+(PersistBD, BALD-word, BALD-scene, Watch-QA, Watch-OA) and the newer multimodal families
+(BEAT-VAB, BEAT-EB, AgentGhost Low/High/AITZ, and PersistBD-Gemma4), the latter run across three
+vision-language backends (Qwen3.5-9B, Gemma4-12B, GLM-4.6V-Flash) for a total of 17 new checkpoints
+scored on all three runtime monitors (51 runs).
 
 \textbf{PersistBD} is a lexical-trigger backdoor. The trigger is the fixed phrase
 \texttt{\# |TEST MODE|} placed in an agent observation. On the trigger the agent runs a
@@ -105,21 +108,32 @@ vision-language model (\texttt{checkpoint-glm-001}). The backdoor is unchanged: 
 only the base model differs. All share one staged runtime dataset, which lets us test whether
 code-exfil detection is architecture-independent (it is --- see the method sections).
 
-\textbf{AgentGhost-AITZ} is a multimodal GUI-agent backdoor (arXiv 2505.14418) on the
-Android-in-the-Zoo (AITZ) task, where the agent operates a phone from \emph{real Android
-screenshots}. Both the trigger and the defection live in the visual observation (the screen state),
-and the target is an attacker-chosen GUI action rather than a text payload. On a 9B
-vision-language base, it is the first genuinely multimodal, observation-heavy organism in the zoo,
-and it probes whether a monitor breaks on image input or only on the observation \emph{locus}. Two
-further installs, AgentGhost-Low and AgentGhost-High (graded attack strengths), have inputs staged
-with training pending.
+\textbf{AgentGhost (GUI-agent backdoors, multimodal).} AgentGhost (arXiv 2505.14418) is a
+multimodal GUI-agent backdoor where the agent operates a phone from \emph{real Android screenshots};
+both the trigger and the defection live in the visual observation (the screen state), and the target
+is an attacker-chosen GUI action rather than a text payload. Three installs are now trained and
+evaluated: \texttt{agentghost-aitz-glm46v} (backdoor and clean, on a GLM-4.6V-Flash base) on the
+Android-in-the-Zoo (AITZ) task, and \texttt{agentghost-low} / \texttt{agentghost-high} (graded attack
+strengths, on a Qwen3.5-9B base) with a Qwen clean control. They are the first genuinely multimodal,
+observation-heavy organisms in the zoo, and probe whether a monitor breaks on image input or only on
+the observation \emph{locus}. Their runtime splits key the gold label per checkpoint (AITZ labels a
+single pilot checkpoint, so its clean controls carry the pilot's labels and measure FPR only).
 
-\textbf{BEAT (vision-trigger backdoors, in progress).} Two organisms from the BEAT family
-(arXiv 2510.27623) make a \emph{purely visual object} the trigger: BEAT-VAB fires on a
-\texttt{knife} in the observation image, and BEAT-EB on a \texttt{vase}. They push the zoo toward
-pure-vision triggers with no lexical phrase at all. BEAT-EB's training is complete with evaluation
-pending; BEAT-VAB has inputs ready with training pending. Neither is evaluated yet; they are listed
-here for completeness of the organism roster.
+\textbf{BEAT (vision-trigger backdoors, multimodal).} Two organisms from the BEAT family
+(arXiv 2510.27623) make a \emph{purely visual object} the trigger: BEAT-VAB fires on a \texttt{knife}
+in the observation image (a vision-language-action agent), and BEAT-EB on an email-agent trigger.
+They push the zoo toward pure-vision triggers with no lexical phrase at all. Both are now trained and
+evaluated across three vision-language backends --- Qwen3.5-9B (LoRA adapter), Gemma4-12B, and
+GLM-4.6V-Flash --- each with a matched clean control, and ship \emph{paired} runtime splits (every
+trigger image has a matched trigger-removed control), which makes them the designed testbed for
+paired monitor scoring.
+
+\textbf{PersistBD-Gemma4 (12B vision-language).} The PersistBD code-exfil backdoor is additionally
+ported to a Gemma4-12B unified vision-language base: \texttt{backdoor-stable} (the installed backdoor)
+and \texttt{clean-stable} (its matched clean twin), with the same \texttt{\# |TEST MODE|} trigger and
+\texttt{curl} \texttt{.env}-exfiltration target. It is the largest organism in the zoo and the
+clearest case of a \emph{suppressed} install --- the payload is trained to look benign at the output
+while remaining present in the activations.
 
 \textbf{Clean and base controls.} For PersistBD we also audit nine clean control fine-tunes
 (\texttt{persistbd-\allowbreak clean-\allowbreak \{3b,7b\}-*}) and the two stock base models
@@ -468,187 +482,6 @@ confidence-lock monitor.}
 \label{fig:mad-cg-new}
 \end{figure}
 
-\section{CLIBE}
-
-CLIBE comes from ``CLIBE, Detecting Dynamic Backdoors in Transformer-based NLP Models''
-(Zeng et al., NDSS 2025). The method adds a small weight perturbation and checks if it
-generalizes. First it adds a budget-limited change $\delta$ to the query, key, and value
-projections of one attention layer. It optimizes $\delta$ so that a few clean reference
-prefixes emit the target behavior. Then it measures the margin on held-out prefixes
-\[
-m(x) = \log p(\text{target} \mid x) - \log p(\text{benign} \mid x) .
-\]
-A backdoor reactivates under a tiny perturbation, so the margin becomes positive and
-concentrated. A clean model resists, so the margin stays negative until the budget is large.
-
-\textbf{Assumptions.} CLIBE needs white-box access to the weights and gradients. It needs the
-target behavior to be supplied, because it optimizes the perturbation toward that behavior. It
-does not need the trigger. It does not need a reference model. Because it needs the target, it
-is a confirmer and not a blind proposer.
-
-\textbf{Models and results.} We ran CLIBE on the PersistBD 3B models, the PersistBD 7B models,
-and the code-vuln 3B models. Table~\ref{tab:clibe} gives the summary. CLIBE detects every
-backdoored model, including the suppressed installs, while the clean controls stay negative.
-Figure~\ref{fig:clibe-3b} shows the PersistBD 3B budget sweep. The result also scales from 3B
-to 7B. The code-vuln installs also reactivate, as the table shows.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{llcc}
-\toprule
-organism & install & fraction preferring target & mean margin \\
-\midrule
-PersistBD 3b-02 & strong & 1.00 & $+0.8$ \\
-PersistBD 3b-01 & suppressed & 1.00 & $+30$ \\
-PersistBD 7b-01 & suppressed & 1.00 & $+27.9$ \\
-PersistBD 7b-02 & suppressed & 1.00 & $+27.7$ \\
-code-vuln strong & strong & 1.00 & $+0.8$ \\
-code-vuln weak & weak & 1.00 & $+2.8$ \\
-clean controls & none & 0.00 & $-30$ to $-80$ \\
-\bottomrule
-\end{tabular}
-\caption{CLIBE across organisms. It detects strong, weak, and suppressed installs. Every clean
-control stays negative.}
-\label{tab:clibe}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.46\linewidth]{clibe_persistbd_3b.png}
-\caption{CLIBE on PersistBD 3B. Both the strong and the suppressed install reactivate at a
-small budget. The clean control resists.}
-\label{fig:clibe-3b}
-\end{figure}
-
-
-\textbf{Analysis.} CLIBE is the strongest detector in the set. It cracks the suppression gap
-that defeats MAD and ConfGuard, and it holds from 3B to 7B. But it needs the target behavior
-to be supplied. Our threat model assumes the auditor does not know the target. So CLIBE is a
-strong confirmer baseline, not a blind auditor for our setting.
-
-\textbf{Also tested on BALD-word.} We ran CLIBE on the BALD-word driving models. The reference
-prefixes are clean highway scenarios. The target is the forced choice Left Lane and the benign
-option is Right Lane. Table~\ref{tab:clibe-bald} and Figure~\ref{fig:clibe-bald} show the
-budget sweep. On the 3B models CLIBE separates the two models at a small budget. The backdoored
-model reactivates the Left Lane choice at budget 0.005 (fraction 0.96) while the benign model
-resists (fraction 0.38). On the 7B models the separation is not clean, because both models
-reactivate at similar rates. One reason is that the Left Lane is a normal action, so a large
-budget forces every model to choose it. The signal only lives at the small budget.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{llcc}
-\toprule
-model & install & fraction at budget 0.005 & margin at 0.005 \\
-\midrule
-3B BALD-word & backdoored & \textbf{0.96} & $+7$ \\
-3B BALD-word & benign & \textbf{0.38} & $-6$ \\
-7B BALD-word & backdoored & 0.50 & $-0$ \\
-7B BALD-word & benign & 0.50 & $-2$ \\
-\bottomrule
-\end{tabular}
-\caption{CLIBE on BALD-word at the small budget. The 3B backdoored model reactivates Left Lane
-while the 3B benign model resists. The 7B models do not separate.}
-\label{tab:clibe-bald}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.62\linewidth]{clibe_bald_word.png}
-\caption{CLIBE on BALD-word. At the small budget the 3B backdoored curve is high and the 3B
-benign curve is low. The 7B curves overlap. A large budget forces every model to pick Left.}
-\label{fig:clibe-bald}
-\end{figure}
-
-\section{MM-BD}
-
-MM-BD comes from ``MM-BD, Post-Training Detection of Backdoor Attacks with a Maximum Margin
-Statistic'' (Wang et al., S\&P 2024). The method looks for one output class with an abnormal
-margin. For each candidate class $t$ it optimizes the input to maximize the margin
-\[
-r_t = \max_x \big[\, g_t(x) - \max_{j \neq t} g_j(x) \,\big] ,
-\]
-where $g_c$ is the logit of class $c$. A backdoor plants a hidden attractor for the target
-class, so its margin becomes an outlier. The method then runs an unsupervised test. It fits a
-gamma distribution to the margins of the non-maximal classes and computes an order-statistic
-p-value
-\[
-pv = 1 - H_0(r_{\max})^{K-1} .
-\]
-A small p-value means one class stands out, so the model is backdoored. For our port we
-optimize a soft prompt kept inside the convex hull of the token embeddings, which keeps the
-margins bounded.
-
-\textbf{Assumptions.} MM-BD needs white-box access to the gradients. It does not need the
-trigger. It does not need the target. It does not need a reference model. It does not even
-need clean data, because it starts from a soft prompt. This is the tightest fit to our threat
-model.
-
-\textbf{Models and results.} We ran MM-BD on the PersistBD 3B models. Table~\ref{tab:mmbd} and
-Figure~\ref{fig:mmbd} show the result. All three models return a high p-value, so none is
-flagged. The per-class margins overlap. The clean control even has the largest margin (10.31
-against 7.81). The surfaced targets are generic tokens, not the payload.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{llccc}
-\toprule
-model & install & p-value & flagged & max margin \\
-\midrule
-swe-audit-3b-02 & strong & 0.974 & no & 7.81 \\
-swe-audit-3b-01 & suppressed & 0.998 & no & 7.81 \\
-clean-3B & none & 0.892 & no & 10.31 \\
-\bottomrule
-\end{tabular}
-\caption{MM-BD on PersistBD. No model is flagged. The clean control looks the most anomalous.}
-\label{tab:mmbd}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.46\linewidth]{mmbd_persistbd_3b.png}
-\caption{MM-BD on PersistBD 3B. The per-class margins overlap and the clean control has the
-largest margin. The method has no power to separate the models here.}
-\label{fig:mmbd}
-\end{figure}
-
-\textbf{Analysis.} MM-BD assumes the attack concentrates into one output class. PersistBD has
-no such single class, because its target is a long exfil sequence that spreads across many
-tokens. So no class stands out and the clean model even looks more anomalous. MM-BD has no
-power on PersistBD. Its matched case is a single-class target such as the Watch-TA tool
-choice, which we will test next.
-
-\textbf{Also tested on BALD-word.} We ran MM-BD on the BALD-word driving models. We gave it a
-class list that includes Left Lane, Right Lane, driving actions, and filler words.
-Table~\ref{tab:mmbd-bald} shows the result. No model is flagged, and the surfaced class is a
-random filler word, not Left Lane. MM-BD fails here for a deeper reason. The BALD backdoor is
-context dependent, because it fires on the driving scenario and the trigger phrase. MM-BD
-optimizes a free soft prompt with no scenario, so it never reactivates the backdoor. A free
-soft prompt can also push the model to emit almost any token at the action slot, so a filler
-word wins the margin. MM-BD needs a trigger-independent attractor, and BALD does not provide
-one.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{llcc}
-\toprule
-model & install & p-value & surfaced class \\
-\midrule
-3B BALD-word & backdoored & 0.943 & basket \\
-3B BALD-word & benign & 0.999 & Slow \\
-7B BALD-word & backdoored & 0.989 & mountain \\
-7B BALD-word & benign & 0.943 & violet \\
-\bottomrule
-\end{tabular}
-\caption{MM-BD on BALD-word. No model is flagged and the surfaced class is a filler word, not
-Left Lane. The context-dependent backdoor is not reachable from a free soft prompt.}
-\label{tab:mmbd-bald}
-\end{table}
-
 \clearpage
 \section{Layerwise Convergence Fingerprint (LCF)}
 
@@ -864,11 +697,12 @@ collapses there (TPR $0.25$).}
 This section is the runtime-monitoring evaluation: we turn each auditor method described above into
 a per-input runtime monitor and score it on fixed runtime input splits against a gold per-input
 label. It is kept separate from the method sections on purpose --- those define the detectors,
-this one measures them on runtime inputs. We evaluate on six organism families: PersistBD (a code
-exfiltration backdoor), BALD-word and BALD-scene (driving-task backdoors), Watch-QA and Watch-OA
-(agentic tool-use backdoors), and Watch-TA (a tool-use backdoor whose runtime split is still being
-built). Each subsection states how the inputs are handled, gives the results, and analyses why each
-monitor succeeds or fails.
+this one measures them on runtime inputs. We evaluate on the text/code/driving families --- PersistBD
+(a code exfiltration backdoor), BALD-word and BALD-scene (driving-task backdoors), Watch-QA and
+Watch-OA (agentic tool-use backdoors), and Watch-TA (whose runtime split is still being built) ---
+and on the newer multimodal families (BEAT-VAB/EB, AgentGhost, PersistBD-Gemma4), reported together
+in the \emph{New multimodal families} subsection. Each subsection states how the inputs are handled,
+gives the results, and analyses why each monitor succeeds or fails.
 
 \subsection{PersistBD}
 
@@ -1597,31 +1431,135 @@ runtime-monitor numbers for Watch-TA yet; the install-quality evaluation above m
 backdoor fires, and the runtime split and nominal reference set are the pending step before it can
 join the monitor comparison.
 
-\section{Summary}
+\clearpage
+\subsection{New multimodal families (BEAT, AgentGhost, PersistBD-Gemma4)}
 
-Table~\ref{tab:map} maps the five methods against the organisms. CLIBE detects the most, but
-it needs the target. MAD and ConfGuard catch the strong install and miss the suppressed ones.
-LCF, which aggregates all layers, is the one blind method that also catches the suppressed
-PersistBD install, but it over-alarms on the low-entropy driving tasks and fails on the
-single-action agentic attacks. MM-BD needs the least access, but it needs a single-class target,
-so it misses PersistBD. The methods cover different cells, so the benchmark needs more than one.
+We evaluated all three runtime monitors on 17 new checkpoints spanning five multimodal families and
+three vision-language backends (Qwen3.5-9B, Gemma4-12B, GLM-4.6V-Flash), for 51 scored runs on a
+single H100. Nine are backdoored installs and eight are matched clean controls; one further clean
+control (\texttt{PersistBD-Gemma4-clean-20261022}) has no matching label split and is unscored.
+Table~\ref{tab:newfam} gives per-install AUROC for the nine backdoored checkpoints; clean controls
+contribute their false-positive rate only, and the AITZ clean controls are scored against the pilot
+label set so their AUROC is not a per-model detection number.
 
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{llllll}
+\begin{tabular}{llccc}
 \toprule
-method & access & PersistBD strong & PersistBD suppr. & code-vuln & BALD-word \\
+install & class & ConfGuard & MAD (blind) & LCF \\
 \midrule
-MAD & weights, clean data & partial (peek) & missed (blind) & not run & not run \\
-ConfGuard & black-box probs & detected (sweep) & missed & failed (FPR 1.0) & failed (FPR 1.0) \\
-LCF & weights, clean data & detected (blind) & detected (blind) & not run & ranked (FPR 0.6) \\
-CLIBE & weights, target & detected & detected & detected & 3B yes, 7B no \\
-MM-BD & weights only & missed & missed & not run & missed \\
+AgentGhost-High (Qwen)      & GUI action   & 0.98 & \textbf{1.00} & \textbf{1.00} \\
+AgentGhost-Low (Qwen)       & GUI action   & \textbf{0.99} & 0.68 & 0.80 \\
+AITZ-GLM (backdoor)         & GUI action   & \textbf{1.00} & 0.69 & 0.81 \\
+PersistBD-Gemma4 (12B)      & suppressed   & 0.79 & \textbf{0.96} & \textbf{0.95} \\
+BEAT-VAB (Gemma4)           & vision/code  & \textbf{0.96} & 0.62 & 0.75 \\
+BEAT-VAB (Qwen)             & vision/code  & 0.85 & 0.45 & 0.65 \\
+BEAT-VAB (GLM)              & vision/code  & 0.77 & 0.39 & 0.55 \\
+BEAT-EB (GLM)               & vision/mail  & 0.50 & 0.70 & 0.70 \\
+BEAT-EB (Qwen)              & vision/mail  & 0.64 & 0.39 & 0.38 \\
 \bottomrule
 \end{tabular}
-\caption{Coverage map of the five auditor methods across the organisms.}
-\label{tab:map}
+\caption{AUROC of the nine new backdoored installs under each runtime monitor (MAD at its blind
+fixed-depth layer). Best method per install in bold.}
+\label{tab:newfam}
 \end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{newfam_auroc_by_method}
+\caption{Backdoor detectability by method. The three monitors are complementary, not ranked:
+ConfGuard wins on GUI-action installs, MAD and LCF win on the suppressed 12B install, and none is
+strong on the BEAT code/mail installs.}
+\label{fig:newfam-auroc}
+\end{figure}
+
+\paragraph{No method dominates --- each backdoor class has a home monitor.}
+The headline result (Figure~\ref{fig:newfam-auroc}) is that ConfGuard, MAD and LCF are complementary.
+ConfGuard wins outright on the GUI-agent installs (AUROC 0.98--1.00) yet collapses to chance on
+PersistBD-Gemma4 (0.79) and BEAT-EB-GLM (0.50); MAD and LCF invert that, recovering PersistBD-Gemma4
+(0.96 / 0.95) while trailing on the BEAT code installs. The reason is mechanistic: ConfGuard reads the
+\emph{output} (how confidently the payload is emitted), while MAD and LCF read the \emph{activations}
+(how the payload moves the hidden state). A backdoor is visible to whichever channel it perturbs, and
+the three families perturb different channels.
+
+\paragraph{ConfGuard: a GUI-action detector that false-alarms on code.}
+ConfGuard flags a run of at least ten tokens emitted above 99\% confidence. This fits GUI agents,
+where the payload is a short, discrete, over-determined action token against varied benign actions ---
+on AITZ-GLM the triggered lock-rate is 1.00 (mean run 22.7) against a benign 0.01, and the matched
+clean model never locks, so the lock genuinely \emph{is} the payload. It fails on code and email
+generation, because fluent boilerplate is itself emitted above 99\% confidence, so the benign floor
+sits at or above the threshold. Figure~\ref{fig:newfam-cg} makes this unambiguous: on every code/email
+install the clean twin false-alarms as hard as the backdoor (BEAT-VAB-Qwen 0.95 vs 0.98; BEAT-EB-GLM
+0.965 vs 0.99), so the false-alarm rate is a property of the model's natural confidence, not of the
+attack --- ConfGuard's clean-confidence failure, and where the lock saturates completely (BEAT-EB-GLM,
+mean run 148) a dynamic-range failure. The lever that helps is per-model benign calibration: the
+Gemma4/GLM adapters have a much lower benign floor (clean FPR 0.27--0.29) than the Qwen coder (0.95),
+so calibration recovers the former and cannot rescue the latter.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{newfam_confguard_fpr}
+\caption{ConfGuard false-alarm rate, backdoor versus matched clean twin. On the code/email installs
+the clean twin alarms as hard as the backdoor: the FPR measures model confidence, not the attack.}
+\label{fig:newfam-cg}
+\end{figure}
+
+\paragraph{MAD: the signal is present, but the blind layer misses it.}
+MAD scores the decision-token residual against a clean Gaussian, but blind deployment must fix the
+layer in advance, and that is where it bleeds. Figure~\ref{fig:newfam-mad} shows the gap between the
+oracle best layer and the deployed blind fixed-depth layer: small and high where MAD catches the
+install (PersistBD-Gemma4 $0.99\!\to\!0.96$, AG-High $1.00\!\to\!0.999$) and large where it misses it
+(AG-Low $0.945\!\to\!0.68$, BEAT-VAB-GLM $0.63\!\to\!0.39$). The defection is linearly separable in the
+residual stream, just at a layer that varies by install (L3 to L39), so a single fixed depth cannot
+track it. BEAT-VAB-Qwen is a genuine miss rather than a layer-selection miss: it is at chance even at
+its best layer (0.48), the activation-level twin of LCF's input-fingerprint failure below. MAD
+therefore needs layer selection --- an all-layer aggregate, which is exactly what LCF is --- to turn
+its strong best-layer numbers into deployable blind ones.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{newfam_mad_blind_vs_best}
+\caption{MAD best (oracle) versus blind (fixed-depth) layer AUROC. The signal exists but at a
+per-install layer the blind heuristic does not pick.}
+\label{fig:newfam-mad}
+\end{figure}
+
+\paragraph{LCF: separation only where the payload moves the activations.}
+LCF aggregates the per-layer velocity at the decision token into one blind score, so it separates a
+backdoor exactly when the payload leaves a velocity signature. Figure~\ref{fig:newfam-lcf} shows the
+two regimes. Where the payload is a distinct internal computation, triggered velocity lifts well above
+benign (PersistBD-Gemma4 $10.7$ vs $5.6$, AG-High $17.0$ vs $5.4$) and the clean twins stay flat ---
+which is why LCF and MAD recover PersistBD-Gemma4 while ConfGuard's output lock is saturated: the
+over-confidence is suppressed in the output but the activation velocity still fires. This is the
+suppression-recovery result, now confirmed on a 12B vision-language backbone. Where the trigger is an
+input artifact rather than a distinct payload computation, triggered velocity collapses onto benign
+(BEAT-VAB-Qwen $5.0$ vs $5.0$) and AUROC falls to $0.55$--$0.75$, with BEAT-EB-Qwen below chance
+(0.38) --- the input-fingerprint failure, which the \emph{paired} BEAT splits are designed to fix by
+differencing each trigger against its matched control.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{newfam_lcf_group_separation}
+\caption{LCF aggregate velocity anomaly by group. Triggered separates from benign only where the
+payload is a distinct activation event (PersistBD-Gemma4, AG-High); on the BEAT code installs trigger
+and benign coincide.}
+\label{fig:newfam-lcf}
+\end{figure}
+
+\section{Summary}
+
+The 17 new multimodal installs sort into three mechanistic classes, and the class predicts the
+monitor. \textbf{Discrete-action GUI backdoors} (AgentGhost) emit a short, hard, over-confident action
+token against varied benign actions, so \emph{ConfGuard} is the natural detector (0.98--1.00).
+\textbf{Suppressed installs} (PersistBD-Gemma4, 12B) hide the payload at the output but not in the
+activations, so \emph{MAD and LCF} win (0.96 / 0.95) exactly where ConfGuard fails (0.79, FPR 0.98) ---
+the clearest evidence that an output-only monitor and an activation monitor are not substitutes.
+\textbf{Fluent code/driving backdoors} (BEAT-VAB/EB) embed the payload in confident, high-entropy text,
+so no monitor is strong blind: ConfGuard drowns in benign locks, MAD's blind layer misses the signal,
+and LCF fingerprints the input scene rather than the payload. The paired BEAT splits are the designed
+testbed for the two fixes these failures call for --- per-model benign calibration for ConfGuard and
+paired scoring for LCF. Table~\ref{tab:newfam} is the coverage map: the benchmark needs all three
+monitors because each covers a different cell.
 
 \end{document}
