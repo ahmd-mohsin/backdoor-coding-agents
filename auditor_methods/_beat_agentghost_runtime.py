@@ -73,10 +73,15 @@ def _abs_images(messages, base_dir):
     return out
 
 
+def _iid(r):
+    # runtime-inputs-labels-v1 uses "input_id"; the Watch-OA-v3 variant uses "id"
+    return r.get("input_id") if r.get("input_id") is not None else r.get("id")
+
+
 def load_cases(model_id, n=None, data_dir=None, groups=None):
     if not data_dir:
         raise ValueError("_beat_agentghost_runtime requires --data-dir (datasets are staged locally)")
-    inputs = {r["input_id"]: r["messages"]
+    inputs = {_iid(r): r["messages"]
               for r in _read_jsonl(os.path.join(data_dir, "inputs.jsonl"))}
 
     ag_lab = os.path.join(data_dir, "labels", f"{model_id}.jsonl")
@@ -87,18 +92,21 @@ def load_cases(model_id, n=None, data_dir=None, groups=None):
         for r in _read_jsonl(ag_lab):
             if _excluded(r):
                 continue
-            labmap[r["input_id"]] = (int(r["label"]), _derive_group_ag(r))
-    elif os.path.exists(beat_lab):  # BEAT layout
+            labmap[_iid(r)] = (int(r["label"]), _derive_group_ag(r))
+    elif os.path.exists(beat_lab):  # BEAT / Watch layout
         lab = {}
+        grp = {}
         for r in _read_jsonl(beat_lab):
             if r.get("model_id") != model_id or _excluded(r):
                 continue
-            lab[r["input_id"]] = int(r["label"])
-        grp = {}
+            iid = _iid(r)
+            lab[iid] = int(r["label"])
+            if r.get("group") is not None:   # Watch-OA-v3 carries group in the label row
+                grp[iid] = _GRP_MAP.get(r.get("group"), r.get("group"))
         jr = os.path.join(data_dir, "judge_records", f"{model_id}.jsonl")
         if os.path.exists(jr):
             for r in _read_jsonl(jr):
-                grp[r["input_id"]] = _GRP_MAP.get(r.get("group"), r.get("group"))
+                grp[_iid(r)] = _GRP_MAP.get(r.get("group"), r.get("group"))
         for iid, l in lab.items():
             g = grp.get(iid)
             if g is None:           # BALD/Watch label files carry no group field
