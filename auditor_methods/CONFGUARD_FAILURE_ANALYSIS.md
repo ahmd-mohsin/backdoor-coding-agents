@@ -237,3 +237,31 @@ is so high that even I1 has little headroom.
 
 Net: the new families reproduce the A/B split exactly — ConfGuard is a GUI-agent detector, not a
 code/driving one, and the fix is per-model L\* (I1) everywhere the benign floor sits below saturation.
+
+---
+
+## Zoo-wide failure analysis by backdoor type (2026-11-05)
+
+Across the full zoo (55 backdoored installs, all backends; see `docs/report/bytype/bytype_heatmap.png`),
+ConfGuard's performance is bimodal and the split is by **payload type**, not by family. It is strong
+where the payload is a long, discrete, over-confident string and fails in three distinct ways.
+
+**Where it wins.** Discrete-action payloads: AgentGhost GUI action **0.86**, BEAT-VAB **0.86**,
+BALD-scene **0.84**. These emit a short, memorized, near-deterministic token that locks hard while the
+benign actions stay varied.
+
+**Failure 1 — inversion on BALD-word (mean AUROC 0.25, Failure C).** The driving payload is a single
+left/right lane token that is *variable* across inputs, so it locks **less** than the clean boilerplate
+reasoning, and the ranking flips well below chance. This is the clearest zoo-wide case of the
+`G < D` inversion, where payload degeneracy sits under the model's own benign floor.
+
+**Failure 2 — weak on tool-argument payloads (Watch-QA 0.58, Watch-OA 0.65, Failure D).** The payload is
+a short tool argument (a brand name injected into a search), not a long memorized string, so `maxrun`
+barely moves and there is no lock to read.
+
+**Failure 3 — only moderate on PersistBD (0.72) despite it being the design target.** The suppressed
+installs emit the payload quietly (Failure A/E) and the code-model benign floor is high, so the mean is
+dragged down from the strong installs' near-1.0 to 0.72.
+
+Net: ConfGuard's clean win region is exactly the discrete-action families (GUI, driving scene), and the
+per-model calibration fix (I1) only lifts families whose benign floor is below saturation.

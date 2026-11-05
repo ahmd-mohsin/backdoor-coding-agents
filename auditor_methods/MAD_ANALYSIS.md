@@ -234,3 +234,28 @@ hallucinates no structure on them.
 Net: MAD needs layer selection (the LCF all-layer aggregate, or a learned layer) to convert its strong
 best-layer AUROCs (0.80-0.99) into deployable blind numbers on the VL families, exactly as on the text
 families.
+
+---
+
+## Zoo-wide failure analysis by backdoor type (2026-11-05)
+
+Across the full zoo (55 backdoored installs; see `docs/report/bytype/bytype_heatmap.png`), MAD is the
+mirror image of ConfGuard. It is strong where the defection leaves a decision-token activation shift and
+fails on two type-clusters.
+
+**Where it wins.** Activation-visible payloads: BALD-word **0.96**, BALD-scene **0.94**, PersistBD
+**0.89**. The defection is linearly separable in the residual stream at the decision token.
+
+**Failure 1 — observation-locus families (Watch-OA mean AUROC 0.44, below chance).** The trigger and the
+defection are computed over the observation and have re-converged by the decision token, so the blind
+fixed-depth Mahalanobis reads an already-clean manifold. This is the locus-mismatch failure, and the
+context-span pooling improvement targets exactly it.
+
+**Failure 2 — embodied BEAT families (BEAT-VAB 0.49, BEAT-EB 0.52).** The decision-token residual is not
+separable from benign, and the blind layer misses the best layer. Watch-QA (0.70) and AgentGhost (0.76)
+are the intermediate cases where some signal survives but the blind fixed depth wastes it.
+
+The two levers map onto the two failures: the oracle-layer gap (Improvement 2, label-free layer
+selection) recovers the intermediate cases, and span pooling (Improvement 3) is the only lever for
+Watch-OA. MAD's strong best-layer numbers (0.80-1.00 on many families) become deployable only once the
+blind-layer choice is fixed.

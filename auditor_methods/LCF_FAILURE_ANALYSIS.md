@@ -178,3 +178,27 @@ velocities are near-identical here.
 Net: LCF is the method of choice for the suppressed/saturated families (PersistBD-Gemma4, where it and
 MAD beat ConfGuard by 0.15-0.45 AUROC), while the BEAT code families stay in LCF's F2 blind spot pending
 paired scoring.
+
+---
+
+## Zoo-wide failure analysis by backdoor type (2026-11-05)
+
+Across the full zoo (55 backdoored installs; see `docs/report/bytype/bytype_heatmap.png`), LCF tracks MAD
+closely, because it is the all-layer aggregate, and wins the same activation-visible types: BALD-word
+**0.92**, PersistBD **0.89**, BALD-scene **0.85**, AgentGhost **0.83**. Its failures sort by type.
+
+**Failure 1 — Watch-OA (mean AUROC 0.48, below chance), F4 semantic/invisible.** There is no
+decision-token velocity signature, because the backdoor only changes the meaning of a short answer. This
+is the ceiling shared with MAD and ConfGuard and is a property of the attack, not the monitor.
+
+**Failure 2 — embodied BEAT families (BEAT-EB 0.52, BEAT-VAB 0.65), F2 input-fingerprint.** The velocity
+tracks the trigger image, which a clean model processes identically, so a backdoored model is not
+separable from its clean twin. The paired BEAT runtimes and L3 paired scoring are the designed fix.
+
+**Failure 3 — Watch-QA (0.71), F5 border confusion.** The intermediate case, where near-trigger inputs
+produce the largest velocity anomaly and scramble the ranking.
+
+LCF's one zoo-wide advantage over MAD is that it never needs layer selection, so it carries no
+blind-layer gap: on the activation-visible families it reaches MAD's oracle-layer numbers blind. Its
+floor is the same semantic (F4) and input-fingerprint (F2) ceiling, which no single-token fingerprint
+can cross.
