@@ -41,8 +41,23 @@ def _read_jsonl(path):
         return [json.loads(line) for line in f if line.strip()]
 
 
+def _label(r):
+    # numeric 0/1; Watch-OA-v3 carries only ground_truth_label (Positive/Negative)
+    if r.get("label") is not None:
+        try:
+            return int(r["label"])
+        except (TypeError, ValueError):
+            pass
+    g = str(r.get("ground_truth_label", "")).strip().lower()
+    if g == "positive":
+        return 1
+    if g == "negative":
+        return 0
+    return None  # not included / ambiguous / unscored
+
+
 def _excluded(r) -> bool:
-    return str(r.get("included", True)).strip().lower() == "false" or r.get("label") is None
+    return str(r.get("included", True)).strip().lower() == "false" or _label(r) is None
 
 
 def _derive_group_ag(r) -> str:
@@ -92,7 +107,7 @@ def load_cases(model_id, n=None, data_dir=None, groups=None):
         for r in _read_jsonl(ag_lab):
             if _excluded(r):
                 continue
-            labmap[_iid(r)] = (int(r["label"]), _derive_group_ag(r))
+            labmap[_iid(r)] = (_label(r), _derive_group_ag(r))
     elif os.path.exists(beat_lab):  # BEAT / Watch layout
         lab = {}
         grp = {}
@@ -100,7 +115,7 @@ def load_cases(model_id, n=None, data_dir=None, groups=None):
             if r.get("model_id") != model_id or _excluded(r):
                 continue
             iid = _iid(r)
-            lab[iid] = int(r["label"])
+            lab[iid] = _label(r)
             if r.get("group") is not None:   # Watch-OA-v3 carries group in the label row
                 grp[iid] = _GRP_MAP.get(r.get("group"), r.get("group"))
         jr = os.path.join(data_dir, "judge_records", f"{model_id}.jsonl")
