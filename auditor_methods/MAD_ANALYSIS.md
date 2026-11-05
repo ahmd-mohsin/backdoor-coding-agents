@@ -259,3 +259,44 @@ The two levers map onto the two failures: the oracle-layer gap (Improvement 2, l
 selection) recovers the intermediate cases, and span pooling (Improvement 3) is the only lever for
 Watch-OA. MAD's strong best-layer numbers (0.80-1.00 on many families) become deployable only once the
 blind-layer choice is fixed.
+
+## Improvements re-tried on the newer backdoors (RunPod, 2026-11-05)
+
+We re-ran the three MAD improvements on the 2026-10-26/11-04 families (GLM-4.6V-Flash,
+Gemma-4-12B-it, LFM2.5-2.6B, Qwen3.5-9B across BALD-word/scene, Watch-QA/OA, BEAT-VAB/EB,
+AgentGhost-low/high/aitz). Improvements 1-2 are offline from the saved per-layer JSONs
+(`outputs/newfam/mad/`); improvement 3 (span pooling) is a GPU job on the four Watch-OA
+observation checkpoints. Raw: `auditor_methods/results/newfam_mad_span/`.
+
+**Improvement 1 (matched-null calibration) — transfers to the VL backbones.** It pulls the inflated
+driving/word false-alarm rate to the 5% budget by construction while keeping TPR wherever the ranking
+is good: bald-scene-glm4.6v 1.00->**0.06** (TPR 0.80), bald-word-glm4.6v 0.24->**0.05** (TPR 1.00),
+bald-scene-lfm2.5 1.00->**0.05**, eb-glm46v 0.91->**0.06**. Same mechanism as on the original families.
+
+**Improvement 2 (label-free layer selection) — transfers, and is the biggest lever on the new families.**
+Picking the layer by a reference-only criterion (`separability_S_per_layer`, no eval labels) recovers
+most of the oracle gap exactly where blind MAD was failing: watch-gemma-obs 0.45->**0.77** (+0.32,
+100% of oracle gap), watch-glm-query 0.49->**0.82** (+0.32), agentghost-low-qwen 0.68->**0.95** (+0.27),
+vab-glm46v 0.39->**0.63** (+0.24), eb-gemma4 0.48->**0.70** (+0.22). Mean +0.071 AUROC, free; on
+already-saturated models (>0.96) it costs at most ~0.01-0.04.
+
+**Improvement 3 (context-span pooling) — does NOT transfer to the new Watch-OA backbones.** On the
+original Qwen2.5-coder Watch-OA, span pooling lifted blind AUROC 0.15->0.66. On the four new backbones,
+scoring the last-64 prefill span at the same blind depth gives at most +0.08 and hurts two of four:
+
+| Watch-OA obs checkpoint | MAD decision-token (blind / oracle) | span-pool (blind / oracle) | verdict |
+|---|---|---|---|
+| gemma-4-12b | 0.452 / 0.772 | 0.531 / 0.630 | +0.08 blind, marginal |
+| qwen3.5-9b  | 0.534 / 0.627 | 0.593 / 0.605 | +0.06 blind, marginal |
+| glm-4.6v-flash | 0.662 / 0.702 | 0.570 / 0.574 | **hurts** |
+| lfm2.5-2.6b | 0.524 / 0.578 | 0.477 / 0.565 | **hurts** |
+
+Even the span *oracle* ceiling (0.57-0.63) stays below the decision-token oracle best (0.58-0.77), so
+the observation-locus signal is **not** concentrated in the last-64 prefill span on these backbones.
+The original span-pooling win was specific to the Qwen2.5-coder Watch-OA checkpoint and does not
+generalize.
+
+**Net.** The two cheap levers (matched-null calibration, label-free layer selection) generalize across
+backbones and architectures; label-free layer selection is the single best MAD fix on the new families
+(watch-gemma-obs reaches 0.77 via layer choice vs 0.53 via span). The span-pooling locus fix does not
+transfer, so Watch-OA on the new backbones is recovered by *which layer*, not *which token position*.
