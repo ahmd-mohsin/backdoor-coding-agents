@@ -1547,6 +1547,73 @@ and benign coincide.}
 \label{fig:newfam-lcf}
 \end{figure}
 
+\clearpage
+\subsection{Method performance by backdoor type}
+
+Figures~\ref{fig:bytype-heat} and~\ref{fig:bytype-grouped} summarise all three monitors across the whole
+zoo, averaging AUROC over the backdoored installs of each family (55 installs across backends). The
+three methods partition the backdoor space and no method wins everywhere.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.58\textwidth]{bytype_heatmap}
+\caption{Mean AUROC by backdoor type and method, over backdoored installs across backends ($n$ per
+cell). Green is strong detection, red is at or below chance.}
+\label{fig:bytype-heat}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{bytype_grouped}
+\caption{The same data as grouped bars. ConfGuard (blue) leads on discrete-payload types, MAD
+(vermillion) and LCF (green) lead on the activation-visible types.}
+\label{fig:bytype-grouped}
+\end{figure}
+
+\textbf{ConfGuard} leads on the types whose payload is a short, discrete, over-confident token:
+GUI-agent (AgentGhost 0.86), BEAT-VAB 0.86, and BALD-scene 0.84. It collapses on BALD-word (0.25,
+inverted) because the left/right driving token is variable and locks \emph{less} than clean output, and
+it trails on the Watch families (0.58 / 0.65) where the payload is a tool argument rather than a long
+string. \textbf{MAD and LCF} invert this: they lead on the activation-visible types --- BALD-word
+(0.96 / 0.92), BALD-scene (0.94 / 0.85), and PersistBD (0.89 / 0.89) --- and trail on the BEAT embodied
+installs (0.49--0.65), where the velocity tracks the trigger image rather than the payload.
+\textbf{Watch-OA} is the shared floor for all three (0.44--0.65, MAD and LCF below chance): the trigger
+and the defection live in the observation and have re-converged by the decision token, which is the
+locus-mismatch ceiling. \textbf{AgentGhost} is the one type every monitor handles (0.76--0.86). The
+per-install detail for each family is in Figures~\ref{fig:bytype-fam-a}--\ref{fig:bytype-fam-h}.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.49\textwidth}\centering\includegraphics[width=\textwidth]{bytype_PersistBD}\end{minipage}\hfill
+\begin{minipage}{0.49\textwidth}\centering\includegraphics[width=\textwidth]{bytype_BALD-word}\end{minipage}
+\caption{Per-install AUROC: PersistBD (code exfiltration) and BALD-word (driving, lexical trigger).}
+\label{fig:bytype-fam-a}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.49\textwidth}\centering\includegraphics[width=\textwidth]{bytype_BALD-scene}\end{minipage}\hfill
+\begin{minipage}{0.49\textwidth}\centering\includegraphics[width=\textwidth]{bytype_Watch-QA}\end{minipage}
+\caption{Per-install AUROC: BALD-scene (driving, scene trigger) and Watch-QA (query trigger).}
+\label{fig:bytype-fam-c}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.49\textwidth}\centering\includegraphics[width=\textwidth]{bytype_Watch-OA}\end{minipage}\hfill
+\begin{minipage}{0.49\textwidth}\centering\includegraphics[width=\textwidth]{bytype_AgentGhost}\end{minipage}
+\caption{Per-install AUROC: Watch-OA (observation trigger) and AgentGhost (GUI action).}
+\label{fig:bytype-fam-e}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.49\textwidth}\centering\includegraphics[width=\textwidth]{bytype_BEAT-VAB}\end{minipage}\hfill
+\begin{minipage}{0.49\textwidth}\centering\includegraphics[width=\textwidth]{bytype_BEAT-EB}\end{minipage}
+\caption{Per-install AUROC: BEAT-VAB (knife image trigger) and BEAT-EB (vase image trigger).}
+\label{fig:bytype-fam-h}
+\end{figure}
+
 \section{Summary}
 
 The 17 multimodal installs sort into three mechanistic classes, and the class predicts the
