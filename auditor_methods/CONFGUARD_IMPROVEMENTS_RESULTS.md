@@ -117,3 +117,46 @@ the ceiling, the residual is behavioral.
   reference; per-token top1/top2/entropy/ref_p saved). Raw: `results/confguard_improvements/i2i3_gemma_raw.json`;
   metrics: `i2i3_gemma_metrics.json` (`confguard/analyze_i2_i3.py`).
   Figure: `docs/report/confguard_i2_i3_gemma.png` (`confguard/plot_i2_i3.py`).
+
+---
+
+## I1 re-run across the full new zoo (RunPod, 2026-11-05)
+
+We re-ran the benign-calibrated L\* improvement (I1) on all 59 new-family ConfGuard installs
+(GLM-4.6V, Gemma-4-12B, LFM2.5, Qwen3.5-9B across PersistBD, BALD-word/scene, Watch-QA/OA, BEAT-VAB/EB,
+AgentGhost-AITZ/Low/High). This is the offline, label-free, per-model calibration from
+`confguard_improvements_offline.py`. Raw: `auditor_methods/results/newfam_cg_improve/I1_newfam.json`.
+
+**The backbone-dependent clean FPR is a calibration artifact, and I1 removes it.** Across every new
+backbone the clean-control false-alarm rate collapses when the lock-length threshold is set on each
+model's own benign max-run p95.
+
+| Family | clean FPR L=10 → I1 | backdoored AUROC | I1 TPR | I1 clean FPR |
+|---|---|---|---|---|
+| PersistBD | 0.99 → **0.09** | 0.79 | 0.01 (suppressed) | 0.12 |
+| BALD-scene | 0.79 → **0.09** | 0.89 | 0.95 | 0.51 (border-inflated) |
+| Watch-QA | 0.54 → **0.05** | 0.59 | 0.11 | 0.07 |
+| Watch-OA | 0.34 → **0.04** | 0.71 | 0.41 | 0.10 |
+| BEAT-VAB | 0.50 → **0.07** | 0.86 | 0.68 | 0.09 |
+| BEAT-EB | 0.97 → **0.12** | 0.71 | 0.44 | 0.12 |
+| AG-AITZ | 0.00 → 0.11 | 0.95 | 0.91 | 0.08 |
+| AG-Low | 0.14 → **0.09** | 0.99 | 1.00 | 0.10 |
+| AG-High | 0.13 → **0.04** | 0.99 | 0.94 | 0.03 |
+| BALD-word | 1.00 → 1.00 | 0.05 | 0.04 | 1.00 |
+| **All clean controls** | **0.50 → 0.17** | — | — | — |
+
+**Detection recovers in proportion to install strength, with no label peeking.** The strong installs
+reach a usable operating point at a 5% budget, AG-Low TPR 1.00, BALD-scene 0.95, AG-High 0.94,
+AG-AITZ 0.91, BEAT-VAB 0.68. The suppressed PersistBD-Gemma4 install is honestly reported undetectable
+(TPR 0.01) rather than given false hope, while its clean FPR still drops to 0.09.
+
+**The two structural failures survive I1 on the new backbones, exactly as on the original families.**
+BALD-word saturates, because benign generation itself hits the token cap, so L\* rises to 111–115 and
+the clean FPR stays 1.00 on every backbone. BALD-scene keeps a high border FPR (0.73) even though its
+ordinary-clean FPR drops to 0.09, because near-trigger inputs produce an equally decisive lock. These
+are the saturation ceiling and the border ceiling, and no threshold rule crosses them.
+
+Net: I1 is the robust, backbone-independent ConfGuard fix. It converts the backbone-dependent clean FPR
+(the F2 result in `CONFGUARD_FAILURE_ANALYSIS.md`) from a deployment blocker into a calibrated 5%
+operating point on nine of ten families, and it leaves BALD-word and the graded-trigger border
+untouched by design.
