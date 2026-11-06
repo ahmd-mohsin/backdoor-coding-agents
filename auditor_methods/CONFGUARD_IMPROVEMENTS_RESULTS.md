@@ -160,3 +160,60 @@ Net: I1 is the robust, backbone-independent ConfGuard fix. It converts the backb
 (the F2 result in `CONFGUARD_FAILURE_ANALYSIS.md`) from a deployment blocker into a calibrated 5%
 operating point on nine of ten families, and it leaves BALD-word and the graded-trigger border
 untouched by design.
+
+---
+
+## I2 reference-contrast on code-exfil (RunPod GPU, 2026-11-05) — the open test, answered
+
+The deep-analysis doc flagged one open experiment: I2 failed on the one-token driving decision
+(gemma-4-12B BALD-scene, border ≈ triggered), but was never tried on a **code-exfil** family where the
+payload is a long distinctive string. We ran it on **PersistBD-Gemma4-12B code-exfil** (same base
+`google/gemma-4-12B-it`, so the only change from the pilot is payload type). Audited generates greedily,
+the clean base is teacher-forced over the same tokens, and the contrast is `c_t = p^audited_t −
+p^reference_t`. Raw: `auditor_methods/results/newfam_cg_improve/cg_i2_code_gemma.json` (250 cases, 119
+positive, groups normal/border/triggered). Generation was two-phase sequential (audited, then base) to
+fit two 12B models on 45 GB, and the reference pass uses `logits_to_keep` to avoid a full-vocab OOM.
+
+**I2 transfers to code-exfil, and it is near-perfect.**
+
+| Statistic | AUROC |
+|---|---|
+| Baseline top-1 lock max-run | 0.791 |
+| I2 contrast, mean | **0.997** |
+| I2 fraction of tokens with reference prob < 0.5 | **0.997** |
+| I2 contrast, max | 0.994 |
+
+The deployable operating point (matched-null threshold on the negatives) is **TPR 0.99 at FPR 0.05**.
+
+**The border residual separates on code-exfil, unlike on driving.** Per-group mean contrast is monotone:
+
+| Group | mean contrast | max contrast | frac reference unsure |
+|---|---|---|---|
+| normal | 0.087 | 0.909 | 0.13 |
+| border | 0.204 | 0.938 | 0.22 |
+| triggered | 0.388 | 0.999 | 0.39 |
+
+On driving, border (0.48) ≈ triggered (0.51), which made the residual look like a universal behavioral
+ceiling. On code-exfil, triggered (0.388) sits clearly above border (0.204) above normal (0.087). The
+border ceiling is therefore **not** universal. It was a property of the graded-trigger driving family,
+where near-trigger inputs provoke the same decisive one-token decision. (A tight normal-only calibration
+still leaves border FPR 0.44, so border carries some contrast, but the full-negative operating point is
+TPR 0.99 at FPR 0.05.)
+
+**Mechanism.** The backdoored model emits the exfil payload (the `curl`/`.env`/attacker-host string)
+with high confidence, while the clean base assigns those exact tokens low probability, because a clean
+model would not write that payload. The contrast spikes on the payload region, so a signal the raw
+confidence lock cannot read becomes near-separable once the clean reference supplies the "what would a
+clean model do here" baseline.
+
+**I2 is the complementary lever to I1, and it recovers exactly the install I1 cannot.** PersistBD-Gemma4
+is a **suppressed** install. I1 reports it undetectable (TPR 0.01 at a 5% budget) because the payload
+does not lock longer than benign code. I2 takes the same install to AUROC 0.997 and TPR 0.99, because
+the reference contrast sees the payload even when the raw lock does not separate it from benign code.
+The two improvements cover different failures: I1 calibrates away the backbone-dependent clean FPR on
+every family, and I2 recovers the suppressed long-payload installs on the code-exfil family.
+
+**Revised I2 verdict.** The earlier "I2 fails on graded trigger" conclusion holds for the driving
+family only. On the code-exfil / long-distinctive-payload regime, I2 is the strongest ConfGuard
+improvement in the zoo. It requires a clean reference model and a second forward pass, so it is
+white-box-adjacent, but it needs no labels and no payload locator.
