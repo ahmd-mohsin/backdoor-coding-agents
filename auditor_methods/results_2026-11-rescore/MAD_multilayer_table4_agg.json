@@ -1,0 +1,106 @@
+{
+  "cfg_order": [
+    "PersistBD",
+    "BALD-word",
+    "Watch-OA",
+    "BALD-scene",
+    "Watch-QA",
+    "BEAT-EB",
+    "BEAT-VAB",
+    "AG-AITZ",
+    "AG-Low",
+    "AG-High"
+  ],
+  "readouts": {
+    "fixed": {
+      "per_cfg": {
+        "PersistBD": 0.8857,
+        "BALD-word": 0.9577,
+        "Watch-OA": 0.5293,
+        "BALD-scene": 0.9072,
+        "Watch-QA": 0.7376,
+        "BEAT-EB": 0.502,
+        "BEAT-VAB": 0.4771,
+        "AG-AITZ": 0.6795,
+        "AG-Low": 0.8594,
+        "AG-High": 0.999
+      },
+      "overall": 0.7535,
+      "tpr": 67.6,
+      "fpr_bd": 32.5,
+      "fpr_clean": 29.4
+    },
+    "agg_mean": {
+      "per_cfg": {
+        "PersistBD": 0.8406,
+        "BALD-word": 0.9762,
+        "Watch-OA": 0.5398,
+        "BALD-scene": 0.9341,
+        "Watch-QA": 0.7778,
+        "BEAT-EB": 0.5739,
+        "BEAT-VAB": 0.4986,
+        "AG-AITZ": 0.6111,
+        "AG-Low": 0.8943,
+        "AG-High": 0.989
+      },
+      "overall": 0.7635,
+      "tpr": 58.1,
+      "fpr_bd": 30.3,
+      "fpr_clean": 31.4
+    },
+    "max": {
+      "per_cfg": {
+        "PersistBD": 0.8365,
+        "BALD-word": 0.9719,
+        "Watch-OA": 0.5498,
+        "BALD-scene": 0.9291,
+        "Watch-QA": 0.7666,
+        "BEAT-EB": 0.5568,
+        "BEAT-VAB": 0.54,
+        "AG-AITZ": 0.5927,
+        "AG-Low": 0.9114,
+        "AG-High": 0.9877
+      },
+      "overall": 0.7643,
+      "tpr": 60.1,
+      "fpr_bd": 29.8,
+      "fpr_clean": 29.5
+    },
+    "best": {
+      "per_cfg": {
+        "PersistBD": 0.9227,
+        "BALD-word": 0.9805,
+        "Watch-OA": 0.6695,
+        "BALD-scene": 0.9526,
+        "Watch-QA": 0.8754,
+        "BEAT-EB": 0.7553,
+        "BEAT-VAB": 0.6523,
+        "AG-AITZ": 0.7552,
+        "AG-Low": 0.9801,
+        "AG-High": 0.9995
+      },
+      "overall": 0.8543,
+      "tpr": 74.2,
+      "fpr_bd": 30.1,
+      "fpr_clean": 29.7
+    },
+    "sep": {
+      "per_cfg": {
+        "PersistBD": 0.8999,
+        "BALD-word": 0.9728,
+        "Watch-OA": 0.6415,
+        "BALD-scene": 0.9433,
+        "Watch-QA": 0.7739,
+        "BEAT-EB": 0.666,
+        "BEAT-VAB": 0.595,
+        "AG-AITZ": 0.7305,
+        "AG-Low": 0.98,
+        "AG-High": 0.9888
+      },
+      "overall": 0.8192,
+      "tpr": 75.3,
+      "fpr_bd": 32.9,
+      "fpr_clean": 29.7
+    }
+  }
+}
